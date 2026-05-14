@@ -464,20 +464,7 @@
     { name:'Voleibol',emoji:'🏐', color:'#3B82F6' },
   ];
 
-  // ── Expose globals ──
-  window.setDisciplina   = setDisciplina;
-  window.openStats       = openStats;
-  window.closeStats      = closeStats;
-  window.handleModalClick= handleModalClick;
-  window.toggleSection   = toggleSection;
-  window.goNomina        = goNomina;
-  window.goView          = goView;
-  window.openSidebar     = openSidebar;
-  window.closeSidebar    = closeSidebar;
-  window.setMainTab      = setMainTab;
-  window.toggleAno       = toggleAno;
-  window.toggleMencion   = toggleMencion;
-  window.setNominaDisciplina = setNominaDisciplina;
+  // (globals assigned inline below)
 
   // ═══════════════════════════════════════════
   //  INIT
@@ -1059,6 +1046,13 @@
   // ═══════════════════════════════════════════
   //  START
   // ═══════════════════════════════════════════
+  // Expose remaining globals
+  window.setDisciplina = setDisciplina;
+  window.setMainTab = setMainTab;
+  window.goView = goView;
+  window.openSidebar = openSidebar;
+  window.closeSidebar = closeSidebar;
+
   init();
 </script>
 </body>
