@@ -422,16 +422,10 @@
   </div>
 </div>
 
-<!-- Firebase SDKs -->
-<script type="module">
-  import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
-  import {
-    getFirestore, collection, query, where, getDocs, onSnapshot
-  } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
-
-  // ══════════════════════════════════════════════
-  // 🔑  FIREBASE CONFIG  — reemplaza con la tuya
-  // ══════════════════════════════════════════════
+<!-- Firebase SDKs (compat — no type=module needed) -->
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore-compat.js"></script>
+<script>
   const firebaseConfig = {
     apiKey:            "AIzaSyBfUxu8cOIqsGQODGSahnhxA4ueaJk1iU0",
     authDomain:        "intercursos-jrg.firebaseapp.com",
@@ -441,8 +435,8 @@
     appId:             "1:719460669028:web:fecb440237f859c5047171"
   };
 
-  const app = initializeApp(firebaseConfig);
-  const db  = getFirestore(app);
+  firebase.initializeApp(firebaseConfig);
+  const db = firebase.firestore();
 
   // ── State ──
   let disciplina      = 'Fútbol';
@@ -526,8 +520,8 @@
   function subscribePartidos() {
     if (unsubPartidos) unsubPartidos();
     const discId = norm(disciplina);
-    const q = query(collection(db,"partidos"), where("disciplinaId","==",discId));
-    unsubPartidos = onSnapshot(q, snap => {
+    const q = db.collection("partidos").where("disciplinaId", "==", discId);
+    unsubPartidos = q.onSnapshot( snap => {
       hideLoader();
       partidos = snap.docs.map(d=>({id:d.id,...d.data()}));
       renderPartidos();
@@ -537,8 +531,8 @@
   function subscribePosiciones() {
     if (unsubPosiciones) unsubPosiciones();
     const discId = norm(disciplina);
-    const q = query(collection(db,"posiciones"), where("disciplinaId","==",discId));
-    unsubPosiciones = onSnapshot(q, snap => {
+    const q = db.collection("posiciones").where("disciplinaId", "==", discId);
+    unsubPosiciones = q.onSnapshot( snap => {
       if (snap.empty) { posiciones = []; }
       else {
         posiciones = snap.docs.map(d=>({id:d.id,...d.data()})).sort((a,b)=>{
@@ -554,8 +548,8 @@
 
   function subscribeScorer() {
     if (unsubScorer) unsubScorer();
-    const q = query(collection(db,"estudiantes"), where("disciplina","==",disciplina));
-    unsubScorer = onSnapshot(q, snap => {
+    const q = db.collection("estudiantes").where("disciplina", "==", disciplina);
+    unsubScorer = q.onSnapshot( snap => {
       if (snap.empty) { mayorAnotador = null; renderScorer(); return; }
       const lista = snap.docs.map(d=>({id:d.id,...d.data()}));
       lista.sort((a,b)=>(b.puntos_totales||0)-(a.puntos_totales||0));
@@ -908,9 +902,9 @@
     document.getElementById('nominaBody').innerHTML = `<div class="inline-loader"><div class="mini-spin"></div><p>Accediendo a la base de datos…</p></div>`;
 
     try {
-      const ref = collection(db,"estudiantes");
-      const q   = nominaDisciplina ? query(ref,where("disciplina","==",nominaDisciplina)) : ref;
-      const snap = await getDocs(q);
+      const ref = db.collection("estudiantes");
+      const q   = nominaDisciplina ? ref.where("disciplina", "==", nominaDisciplina) : ref;
+      const snap = await q.get();
 
       snap.forEach(doc=>{
         const data = doc.data();
