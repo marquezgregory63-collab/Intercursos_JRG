@@ -473,17 +473,6 @@
     <div class="sec-hd" style="margin-top:24px"><span class="sec-title" id="standingsTitle">Tabla de Posiciones</span></div>
     <div class="table-card" id="standingsTable"></div>
   </div>
-
-  <!-- NOMINA CONTENT (tab) -->
-  <div class="scroll-content" id="nomina-content" style="display:none">
-    <div class="grad-header" style="margin: -24px -16px 20px; border-radius: 0 0 28px 28px; padding: 18px 20px 40px;">
-      <div class="header-row">
-        <div class="header-title-block">
-          <div class="header-title" id="nominaHeaderTitle">Nómina General</div>
-          <div class="header-sub" id="nominaHeaderSub">Filtrado por: Todas las áreas</div>
-        </div>
-      </div>
-    </div>
     <!-- Disc filter for nomina -->
     <div style="display:flex;gap:8px;margin-bottom:20px;flex-wrap:wrap" id="nominaDiscRow"></div>
     <div id="nominaBody"></div>
@@ -996,7 +985,6 @@
 
   function renderNominaDiscRow() {
     document.getElementById('nominaDiscRow').innerHTML = [
-      {name:null,emoji:'🌐',label:'Todos'},
       ...DISCIPLINAS.map(d=>({name:d.name,emoji:d.emoji,label:d.name}))
     ].map(d=>`
       <button onclick="setNominaDisciplina(${d.name?`'${d.name}'`:'null'})"
