@@ -4,7 +4,7 @@
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
 <title>Intercursos JRG — Dashboard</title>
-
+ 
 <!-- Firebase -->
 <script type="module">
   import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
@@ -13,7 +13,7 @@
     addDoc, updateDoc, deleteDoc, setDoc, getDoc, doc,
     serverTimestamp, increment, runTransaction
   } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
-
+ 
   // ── REEMPLAZA CON TU CONFIG REAL ─────────────────────────────
 const firebaseConfig = {
   apiKey: "AIzaSyBfUxu8cOIqsGQODGSahnhxA4ueaJk1iU0",
@@ -24,13 +24,13 @@ const firebaseConfig = {
   appId: "1:719460669028:web:fecb440237f859c5047171"
 };
   // ─────────────────────────────────────────────────────────────
-
+ 
   const app = initializeApp(firebaseConfig);
   const db  = getFirestore(app);
-
+ 
   // ── HELPERS ──────────────────────────────────────────────────
   const normDisc = d => (d||'').toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g,"");
-
+ 
   const MAPA_ABR = { "ADM":"Administración","TEL":"Telemática","CONT":"Contabilidad","TUR":"Turismo" };
   const MAPA_NUM = { "1":"1ER","2":"2DO","3":"3ER","4":"4TO","5":"5TO" };
   const idToNombre = id => {
@@ -38,7 +38,7 @@ const firebaseConfig = {
     const [n,m,s] = id.split("-");
     return `${MAPA_NUM[n]||n} ${m} ${s}`;
   };
-
+ 
   const generarIdEquipo = (ano,mencion,seccion) => {
     const mapa={"1er Año":"1","2do Año":"2","3er Año":"3","4to Año":"4","5to Año":"5"};
     const abr = mencion==="Administración"?"ADM":mencion==="Telemática"?"TEL":mencion==="Contabilidad"?"CONT":"TUR";
@@ -49,7 +49,7 @@ const firebaseConfig = {
     const m = mencion==="Administración"?"ADM":mencion==="Telemática"?"TEL":mencion==="Contabilidad"?"CONT":"TUR";
     return `${n} ${m} ${seccion}`;
   };
-
+ 
   // ═══════════════════════════════════════════════════
   //  ESTADO GLOBAL
   // ═══════════════════════════════════════════════════
@@ -67,9 +67,9 @@ const firebaseConfig = {
     mayorAnotador: null,
     matchTimer: null,
   };
-
+ 
   window.addEventListener('DOMContentLoaded', initApp);
-
+ 
   // ══════════════════════════════════════════════════
   //  INIT
   // ══════════════════════════════════════════════════
@@ -132,7 +132,7 @@ const firebaseConfig = {
       this.setSelectionRange(cur, cur);
     });
   }
-
+ 
   // ══════════════════════════════════════════════════
   //  SCREENS
   // ══════════════════════════════════════════════════
@@ -140,7 +140,7 @@ const firebaseConfig = {
     document.querySelectorAll('.screen').forEach(s=>s.classList.remove('active'));
     document.getElementById(`screen-${name}`).classList.add('active');
   }
-
+ 
   // ══════════════════════════════════════════════════
   //  LOGIN
   // ══════════════════════════════════════════════════
@@ -150,7 +150,7 @@ const firebaseConfig = {
     const pass = document.getElementById('login-pass').value;
     const cedula = `${tipo}${num}`;
     if(!num||!pass){ toast('Completa todos los campos','error'); return; }
-
+ 
     setLoginLoading(true);
     try{
       const q = query(collection(db,'usuarios'), where('cedula','==',cedula));
@@ -164,18 +164,18 @@ const firebaseConfig = {
     }catch(e){ toast('Error de conexión','error'); }
     finally{ setLoginLoading(false); }
   }
-
+ 
   function setLoginLoading(v){
     const btn = document.getElementById('btn-login');
     btn.disabled=v;
     btn.textContent = v?'Conectando…':'ACCEDER';
   }
-
+ 
   // ══════════════════════════════════════════════════
   //  RECOVER
   // ══════════════════════════════════════════════════
   let _recoverCode=null, _recoverData=null;
-
+ 
   async function handleSendCode(){
     const email = document.getElementById('recover-email').value.trim().toLowerCase();
     if(!email){ toast('Ingresa tu correo','error'); return; }
@@ -200,7 +200,7 @@ const firebaseConfig = {
       document.getElementById('btn-send-code').textContent='ENVIAR CÓDIGO';
     }
   }
-
+ 
   function handleVerifyCode(){
     const cod = document.getElementById('recover-code').value.trim();
     if(cod===_recoverCode){
@@ -210,13 +210,13 @@ const firebaseConfig = {
       recoverStep(3);
     } else { toast('Código incorrecto','error'); }
   }
-
+ 
   function recoverStep(n){
     document.querySelectorAll('.recover-step').forEach(s=>s.classList.remove('active'));
     const el = document.getElementById(`recover-step-${n}`);
     if(el) el.classList.add('active');
   }
-
+ 
   // ══════════════════════════════════════════════════
   //  DASHBOARD BOOT
   // ══════════════════════════════════════════════════
@@ -227,14 +227,14 @@ const firebaseConfig = {
     const adminNav = document.getElementById('nav-admin');
     if(APP.session.rol==='admin') adminNav.style.display='flex';
     else adminNav.style.display='none';
-
+ 
     showScreen('dashboard');
     activateSection('inicio');
     subscribeData();
     // tick for live match minutes
     APP.matchTimer = setInterval(updateLiveMinutes, 60000);
   }
-
+ 
   function handleLogout(){
     APP.unsubs.forEach(u=>u());
     APP.unsubs=[];
@@ -245,7 +245,7 @@ const firebaseConfig = {
     document.getElementById('login-cedula').value='';
     document.getElementById('login-pass').value='';
   }
-
+ 
   // ══════════════════════════════════════════════════
   //  SUBSCRIPTIONS
   // ══════════════════════════════════════════════════
@@ -253,7 +253,7 @@ const firebaseConfig = {
     APP.unsubs.forEach(u=>u());
     APP.unsubs=[];
     const discId = normDisc(APP.disc);
-
+ 
     // Partidos
     const u1 = onSnapshot(
       query(collection(db,'partidos'), where('disciplinaId','==',discId)),
@@ -288,7 +288,7 @@ const firebaseConfig = {
     );
     APP.unsubs=[u1,u2,u3];
   }
-
+ 
   function changeDisciplina(disc){
     APP.disc=disc;
     document.querySelectorAll('.disc-pill').forEach(p=>{
@@ -297,7 +297,7 @@ const firebaseConfig = {
     subscribeData();
     renderNominaPage();
   }
-
+ 
   // ══════════════════════════════════════════════════
   //  NAVIGATION
   // ══════════════════════════════════════════════════
@@ -307,7 +307,7 @@ const firebaseConfig = {
     if(name==='nomina') renderNominaPage();
     if(name==='admin') renderAdminPage();
   }
-
+ 
   // ══════════════════════════════════════════════════
   //  RENDER INICIO
   // ══════════════════════════════════════════════════
@@ -315,12 +315,12 @@ const firebaseConfig = {
     const live   = APP.partidos.filter(p=>['en vivo','en curso'].includes(String(p.estado_tiempo||'').toLowerCase().trim()));
     const prox   = APP.partidos.filter(p=>['programado','pendiente'].includes(String(p.estado_tiempo||'').toLowerCase().trim()));
     const result = APP.partidos.filter(p=>['finalizado','terminado'].includes(String(p.estado_tiempo||'').toLowerCase().trim()));
-
+ 
     renderLive(live);
     renderProximos(prox);
     renderResultados(result);
   }
-
+ 
   function renderLive(list){
     const el = document.getElementById('live-container');
     const badge = document.getElementById('live-badge');
@@ -338,7 +338,7 @@ const firebaseConfig = {
         <div class="match-meta"><span>📍 ${p.ubicacion||''}</span></div>
       </div>`).join('');
   }
-
+ 
   function renderProximos(list){
     const el = document.getElementById('prox-container');
     if(!list.length){ el.innerHTML='<p class="no-data">No hay partidos programados</p>'; return; }
@@ -352,7 +352,7 @@ const firebaseConfig = {
         <div class="match-meta"><span>📅 ${p.programacion||'—'}</span><span>📍 ${p.ubicacion||''}</span></div>
       </div>`).join('');
   }
-
+ 
   function renderResultados(list){
     const el = document.getElementById('result-container');
     if(!list.length){ el.innerHTML='<p class="no-data">Sin resultados registrados</p>'; return; }
@@ -366,7 +366,7 @@ const firebaseConfig = {
         <div class="match-meta finalizado-tag">FINALIZADO</div>
       </div>`).join('');
   }
-
+ 
   function renderPosiciones(){
     const el=document.getElementById('tabla-posiciones');
     const mostrarEmpate=APP.disc==='Fútbol';
@@ -388,7 +388,7 @@ const firebaseConfig = {
     const pe_th=document.getElementById('th-pe');
     if(pe_th) pe_th.style.display=mostrarEmpate?'':'none';
   }
-
+ 
   function renderMayorAnotador(){
     const el=document.getElementById('mayor-anotador');
     if(!APP.mayorAnotador){ el.style.display='none'; return; }
@@ -410,21 +410,21 @@ const firebaseConfig = {
     document.getElementById('ma-badge').textContent=badge;
     document.getElementById('ma-pts').textContent=ma.puntos_totales||0;
   }
-
+ 
   function updateLiveMinutes(){
     document.querySelectorAll('.live-min').forEach(el=>{
       const ms=Number(el.dataset.ms);
       el.textContent=calcMin(ms);
     });
   }
-
+ 
   function calcMin(ms){
     if(!ms) return "En vivo";
     const diff=Math.floor((Date.now()-ms)/60000);
     if(diff<0) return "0'";
     return diff>90?"90'+":diff+"'";
   }
-
+ 
   // ══════════════════════════════════════════════════
   //  NÓMINA
   // ══════════════════════════════════════════════════
@@ -480,9 +480,9 @@ const firebaseConfig = {
       el.innerHTML=html;
     }catch(e){ el.innerHTML='<p class="no-data">Error cargando nómina</p>'; }
   }
-
+ 
   function renderNomina(){ if(document.getElementById('page-nomina').classList.contains('active')) renderNominaPage(); }
-
+ 
   // ══════════════════════════════════════════════════
   //  STATS MODAL
   // ══════════════════════════════════════════════════
@@ -495,7 +495,7 @@ const firebaseConfig = {
     const local=p.equipoLocal||p.equipo1||'Local';
     const visita=p.equipoVisita||p.equipo2||'Visita';
     const g1=p.goles1??0, g2=p.goles2??0;
-
+ 
     let statsHTML='';
     if(disc==='futbol'||!disc){
       statsHTML=statRows([
@@ -526,7 +526,7 @@ const firebaseConfig = {
         {label:'DIGS',      v1:s.dig1??0,  v2:s.dig2??0},
       ]);
     }
-
+ 
     // Timeline
     let timelineHTML='<p class="no-data">Sin eventos registrados</p>';
     if(p.historialPuntos?.length){
@@ -539,7 +539,7 @@ const firebaseConfig = {
           </div>
         </div>`).join('');
     }
-
+ 
     document.getElementById('stats-modal-body').innerHTML=`
       <div class="stats-header-card">
         <div class="stats-team">${local}</div>
@@ -553,7 +553,7 @@ const firebaseConfig = {
     `;
     modal.classList.add('active');
   };
-
+ 
   function statRows(rows){
     return rows.map(r=>`
       <div class="stat-row">
@@ -562,7 +562,7 @@ const firebaseConfig = {
         <span class="stat-val">${r.v2}</span>
       </div>`).join('');
   }
-
+ 
   document.addEventListener('DOMContentLoaded',()=>{
     document.getElementById('stats-modal-close').addEventListener('click',()=>{
       document.getElementById('stats-modal').classList.remove('active');
@@ -571,7 +571,7 @@ const firebaseConfig = {
       if(e.target===document.getElementById('stats-modal')) document.getElementById('stats-modal').classList.remove('active');
     });
   });
-
+ 
   // ══════════════════════════════════════════════════
   //  ADMIN
   // ══════════════════════════════════════════════════
@@ -579,13 +579,13 @@ const firebaseConfig = {
     activateAdminTab('partidos');
     renderAdminPartidos();
   }
-
+ 
   function activateAdminTab(tab){
     document.querySelectorAll('.admin-tab').forEach(t=>t.classList.toggle('active',t.dataset.tab===tab));
     document.querySelectorAll('.admin-tab-content').forEach(c=>c.classList.toggle('active',c.id==='atab-'+tab));
     if(tab==='partidos') renderAdminPartidos();
   }
-
+ 
   function renderAdminPartidos(){
     const el=document.getElementById('admin-partidos-list');
     const { db, collection, onSnapshot, query } = APP;
@@ -617,7 +617,7 @@ const firebaseConfig = {
       }).join('');
     });
   }
-
+ 
   window.adminStartMatch = async function(id){
     if(!confirm('¿Iniciar este partido?')) return;
     try{
@@ -626,7 +626,7 @@ const firebaseConfig = {
       renderAdminPartidos();
     }catch(e){ toast('Error: '+e.message,'error'); }
   };
-
+ 
   window.adminFinishMatch = async function(id){
     // Fetch full doc
     const snap=await getDoc(doc(db,'partidos',id));
@@ -639,7 +639,7 @@ const firebaseConfig = {
       renderAdminPartidos();
     }catch(e){ toast('Error: '+e.message,'error'); }
   };
-
+ 
   window.adminDeleteMatch = async function(id){
     if(!confirm('¿Eliminar este partido? Esta acción es irreversible.')) return;
     try{
@@ -648,7 +648,7 @@ const firebaseConfig = {
       renderAdminPartidos();
     }catch(e){ toast('Error','error'); }
   };
-
+ 
   window.adminOpenStats = function(id){
     // Fetch fresh for live match
     getDoc(doc(db,'partidos',id)).then(snap=>{
@@ -658,19 +658,19 @@ const firebaseConfig = {
       openStatsModal(id);
     });
   };
-
+ 
   async function finalizarPartidoDB(partido){
     const { id, goles1, goles2 } = partido;
     const discId = partido.disciplinaId || normDisc(partido.disciplina||'');
     const idLocal=partido.idLocal||null, idVisita=partido.idVisita||null;
     await updateDoc(doc(db,'partidos',id),{ estado_tiempo:'Finalizado' });
     if(!idLocal||!idVisita||!discId) return;
-
+ 
     let pts1=0,pts2=0,pg1=0,pp1=0,pe1=0,pg2=0,pp2=0,pe2=0;
     if(goles1>goles2){ pg1=1;pp2=1; pts1=discId==='basket'?2:3; }
     else if(goles2>goles1){ pg2=1;pp1=1; pts2=discId==='basket'?2:3; }
     else if(discId!=='voleibol'){ pe1=1;pe2=1;pts1=1;pts2=1; }
-
+ 
     const updPos=async(idEq,pts,gf,gc,win,draw,loss)=>{
       const did=`${idEq}_${discId}`;
       const ref=doc(db,'posiciones',did);
@@ -685,7 +685,7 @@ const firebaseConfig = {
     await updPos(idLocal,pts1,goles1,goles2,pg1,pe1,pp1);
     await updPos(idVisita,pts2,goles2,goles1,pg2,pe2,pp2);
   }
-
+ 
   // ── PUBLICAR PARTIDO ─────────────────────────────
   async function publicarPartido(){
     const disc   = document.getElementById('np-disc').value;
@@ -699,7 +699,7 @@ const firebaseConfig = {
     const fecha  = document.getElementById('np-fecha').value;
     const hora   = document.getElementById('np-hora').value;
     if(!fecha||!hora){ toast('Selecciona fecha y hora','error'); return; }
-
+ 
     const discId=normDisc(disc);
     const idLocal=generarIdEquipo(ano1,men1,sec1);
     const idVisita=generarIdEquipo(ano2,men2,sec2);
@@ -707,7 +707,7 @@ const firebaseConfig = {
     const equipoLocal=abreviarEquipo(ano1,men1,sec1);
     const equipoVisita=abreviarEquipo(ano2,men2,sec2);
     const progStr=`${fecha} - ${hora}`;
-
+ 
     const btn=document.getElementById('btn-publish-match');
     btn.disabled=true; btn.textContent='Publicando…';
     try{
@@ -723,7 +723,7 @@ const firebaseConfig = {
     }catch(e){ toast('Error: '+e.message,'error'); }
     finally{ btn.disabled=false; btn.textContent='📅 PUBLICAR PARTIDO'; }
   }
-
+ 
   // ── REGISTRAR ESTUDIANTE ─────────────────────────
   async function registrarEstudiante(){
     const nombre   = document.getElementById('est-nombre').value.trim().toUpperCase();
@@ -734,7 +734,7 @@ const firebaseConfig = {
     const mencion  = document.getElementById('est-mencion').value;
     const seccion  = document.getElementById('est-seccion').value;
     const disc     = document.getElementById('est-disc').value;
-
+ 
     if(!nombre||!apellido||!cnum){ toast('Completa todos los campos','error'); return; }
     if(/[^a-zA-ZáéíóúÁÉÍÓÚñÑüÜ\s]/.test(nombre)||/[^a-zA-ZáéíóúÁÉÍÓÚñÑüÜ\s]/.test(apellido)){
       toast('Solo letras en nombre y apellido','error'); return;
@@ -756,7 +756,7 @@ const firebaseConfig = {
     }catch(e){ toast('Error: '+e.message,'error'); }
     finally{ btn.disabled=false; btn.textContent='✅ REGISTRAR ESTUDIANTE'; }
   }
-
+ 
   // ══════════════════════════════════════════════════
   //  REGISTRO DE CUENTA
   // ══════════════════════════════════════════════════
@@ -776,7 +776,7 @@ const firebaseConfig = {
     if (nombre === 'outlook' && !['com','es'].includes(ext)) return { valido: false, msj: 'Outlook: .com o .es' };
     return { valido: true, msj: '' };
   };
-
+ 
   const validarPassReg = (p) => {
     if (!p || p.length < 8)  return { valido: false, msj: 'Mínimo 8 caracteres.' };
     if (p.length > 16)       return { valido: false, msj: 'Máximo 16 caracteres.' };
@@ -784,7 +784,7 @@ const firebaseConfig = {
     if (/^\d+$/.test(p))    return { valido: false, msj: 'No puede ser solo números.' };
     return { valido: true, msj: '' };
   };
-
+ 
   async function handleRegistro() {
     const tipoBtn  = document.querySelector('.reg-tipo-btn.active');
     const tipoDoc  = tipoBtn ? tipoBtn.dataset.tipo : 'V';
@@ -795,13 +795,13 @@ const firebaseConfig = {
     const pass     = document.getElementById('reg-pass').value;
     const conf     = document.getElementById('reg-pass-confirm').value;
     const cedulaFull = `${tipoDoc}${cedNums}`;
-
+ 
     if (!nom || !ape || !cedNums || !mail || !pass || !conf) {
       toast('Completa todos los campos', 'error'); return;
     }
     if (nom.replace(/\s/g,'').length < 2) { toast('Nombre demasiado corto', 'error'); return; }
     if (ape.replace(/\s/g,'').length < 2) { toast('Apellido demasiado corto', 'error'); return; }
-
+ 
     const longMin = tipoDoc === 'V' ? 7 : 6;
     const longMax = tipoDoc === 'V' ? 8 : 9;
     if (cedNums.length < longMin || cedNums.length > longMax) {
@@ -812,7 +812,7 @@ const firebaseConfig = {
     const vp = validarPassReg(pass);
     if (!vp.valido) { toast(vp.msj, 'error'); return; }
     if (pass !== conf) { toast('Las contraseñas no coinciden', 'error'); return; }
-
+ 
     const btn = document.getElementById('btn-create-account');
     btn.disabled = true; btn.textContent = 'Creando cuenta…';
     try {
@@ -820,7 +820,7 @@ const firebaseConfig = {
       const q = query(collection(db,'usuarios'), where('cedula','==', cedulaFull));
       const snap = await getDocs(q);
       if (!snap.empty) { toast('Esta cédula ya está registrada', 'error'); return; }
-
+ 
       // Guardar en Firestore (sin Firebase Auth en web — igual que el resto del sistema)
       await addDoc(collection(db, 'usuarios'), {
         cedula: cedulaFull, tipoDocumento: tipoDoc,
@@ -842,7 +842,7 @@ const firebaseConfig = {
     } catch(e) { toast('Error de conexión. Intenta más tarde.', 'error'); }
     finally { btn.disabled = false; btn.textContent = 'CREAR CUENTA'; }
   }
-
+ 
   // ══════════════════════════════════════════════════
   //  TOAST
   // ══════════════════════════════════════════════════
@@ -855,11 +855,11 @@ const firebaseConfig = {
     setTimeout(()=>{ t.classList.remove('show'); setTimeout(()=>t.remove(),400); },3000);
   };
 </script>
-
+ 
 <!-- EmailJS -->
 <script src="https://cdn.jsdelivr.net/npm/@emailjs/browser@4/dist/email.min.js"></script>
 <script>emailjs.init('Etf12-NaSwAtvUKCA');</script>
-
+ 
 <style>
 /* ═══════════════════════════ RESET & BASE ═══════════════════════════ */
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
@@ -874,11 +874,11 @@ const firebaseConfig = {
   --font:'Inter',system-ui,sans-serif;
 }
 html,body{height:100%;font-family:var(--font);background:var(--bg);color:var(--text);font-size:14px;line-height:1.5}
-
+ 
 /* ─── SCREENS ─── */
 .screen{display:none}
 .screen.active{display:flex;height:100vh;width:100vw}
-
+ 
 /* ═══════════════════════════ LOGIN ═══════════════════════════ */
 #screen-login,#screen-recover{
   background:linear-gradient(135deg,#001A33 0%,#0284C7 60%,#00D1FF 100%);
@@ -902,7 +902,7 @@ html,body{height:100%;font-family:var(--font);background:var(--bg);color:var(--t
 .auth-school{color:rgba(255,255,255,.85);font-size:11px;font-weight:700;text-align:center;text-transform:uppercase;letter-spacing:.5px}
 .auth-title{color:#00D1FF;font-size:28px;font-weight:900;letter-spacing:1px}
 .auth-subtitle{color:rgba(255,255,255,.7);font-size:13px;text-align:center;margin-bottom:24px}
-
+ 
 .field-label{color:rgba(255,255,255,.75);font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;margin-bottom:6px}
 .field-row{display:flex;gap:8px;margin-bottom:18px}
 .auth-select,.auth-input{
@@ -916,7 +916,7 @@ html,body{height:100%;font-family:var(--font);background:var(--bg);color:var(--t
 .auth-input{width:100%;display:block;margin-bottom:18px}
 .auth-input::placeholder{color:rgba(255,255,255,.35)}
 .auth-input[type=password]{letter-spacing:2px}
-
+ 
 .btn-primary{
   width:100%;padding:14px;border:none;border-radius:12px;
   background:#00D1FF;color:#001A33;font-weight:900;font-size:15px;
@@ -926,12 +926,12 @@ html,body{height:100%;font-family:var(--font);background:var(--bg);color:var(--t
 .btn-primary:hover{background:#00B8E0}
 .btn-primary:active{transform:scale(.98)}
 .btn-primary:disabled{opacity:.6;cursor:not-allowed}
-
+ 
 .auth-links{margin-top:20px;display:flex;flex-direction:column;gap:8px;align-items:center}
 .auth-link{background:none;border:none;color:rgba(255,255,255,.75);font-size:13px;cursor:pointer;text-decoration:underline;padding:4px}
 .auth-link:hover{color:#00D1FF}
 .auth-link b{color:#00D1FF}
-
+ 
 /* Recover steps */
 .recover-step{display:none}
 .recover-step.active{display:block}
@@ -941,10 +941,10 @@ html,body{height:100%;font-family:var(--font);background:var(--bg);color:var(--t
 }
 .recover-label{color:rgba(255,255,255,.7);font-size:11px;font-weight:700;text-transform:uppercase;margin-bottom:4px}
 .recover-value{color:#00D1FF;font-size:22px;font-weight:900;margin-bottom:12px}
-
+ 
 /* ═══════════════════════════ DASHBOARD ═══════════════════════════ */
 #screen-dashboard{flex-direction:row;overflow:hidden}
-
+ 
 /* SIDEBAR */
 .sidebar{
   width:var(--sidebar);height:100vh;
@@ -963,7 +963,7 @@ html,body{height:100%;font-family:var(--font);background:var(--bg);color:var(--t
 .sidebar-brand-text{color:#fff}
 .sidebar-brand-text b{display:block;font-size:13px;font-weight:800;letter-spacing:.3px}
 .sidebar-brand-text span{font-size:10px;opacity:.75}
-
+ 
 .nav-group{padding:10px 0}
 .nav-label{color:rgba(255,255,255,.45);font-size:9px;font-weight:800;letter-spacing:1.2px;padding:8px 20px 4px}
 .nav-item{
@@ -975,7 +975,7 @@ html,body{height:100%;font-family:var(--font);background:var(--bg);color:var(--t
 .nav-item:hover{background:rgba(255,255,255,.1);color:#fff}
 .nav-item.active{background:rgba(255,255,255,.18);color:#fff;box-shadow:inset 3px 0 0 #00D1FF}
 .nav-item .nav-icon{font-size:17px;width:20px;text-align:center}
-
+ 
 .sidebar-footer{margin-top:auto;padding:16px 20px;border-top:1px solid rgba(255,255,255,.12)}
 .user-card{display:flex;align-items:center;gap:10px;margin-bottom:12px}
 .user-avatar{
@@ -990,10 +990,10 @@ html,body{height:100%;font-family:var(--font);background:var(--bg);color:var(--t
   cursor:pointer;transition:background .15s;
 }
 .btn-logout:hover{background:rgba(239,68,68,.3)}
-
+ 
 /* MAIN */
 .main-area{flex:1;display:flex;flex-direction:column;overflow:hidden}
-
+ 
 /* TOP BAR */
 .topbar{
   height:var(--header);background:var(--surface);border-bottom:1px solid var(--border);
@@ -1009,17 +1009,17 @@ html,body{height:100%;font-family:var(--font);background:var(--bg);color:var(--t
 }
 .disc-pill:hover{border-color:var(--primary);color:var(--primary)}
 .disc-pill.active{background:var(--primary);color:#fff;border-color:var(--primary);box-shadow:0 2px 8px rgba(2,132,199,.25)}
-
+ 
 /* CONTENT */
 .content{flex:1;overflow-y:auto;padding:24px 28px}
 .section-page{display:none}
 .section-page.active{display:block}
-
+ 
 /* ── GRID LAYOUTS ── */
 .grid-2{display:grid;grid-template-columns:1fr 1fr;gap:20px}
 .grid-3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:20px}
 .col-span-2{grid-column:span 2}
-
+ 
 /* CARD */
 .card{background:var(--surface);border-radius:var(--radius);padding:20px;border:1px solid var(--border);box-shadow:var(--shadow)}
 .card-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:16px}
@@ -1030,7 +1030,7 @@ html,body{height:100%;font-family:var(--font);background:var(--bg);color:var(--t
 }
 .card-badge::before{content:'';width:6px;height:6px;background:#fff;border-radius:50%;display:inline-block;animation:pulse 1.2s infinite}
 @keyframes pulse{0%,100%{opacity:1}50%{opacity:.3}}
-
+ 
 /* MATCH CARDS */
 .match-card{
   background:var(--surface2);border:1px solid var(--border);border-radius:12px;
@@ -1053,7 +1053,7 @@ html,body{height:100%;font-family:var(--font);background:var(--bg);color:var(--t
 .finalizado-tag{color:var(--muted);font-size:10px;font-weight:800;letter-spacing:1px;text-align:center;margin-top:4px}
 .live-indicator{display:flex;align-items:center;gap:6px;font-size:11px;font-weight:800;color:var(--red);margin-bottom:8px}
 .red-dot{width:8px;height:8px;border-radius:50%;background:var(--red);animation:pulse 1s infinite}
-
+ 
 /* TABLA POSICIONES */
 .tabla-wrap{overflow:hidden;border-radius:12px;border:1px solid var(--border)}
 table.standings{width:100%;border-collapse:collapse;font-size:12px}
@@ -1067,7 +1067,7 @@ table.standings td:nth-child(2){text-align:left;padding-left:12px;font-weight:70
 .rank.top3{color:var(--primary)}
 .pts-cell{font-size:15px;font-weight:900;color:var(--primary)}
 .team-cell{max-width:120px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-
+ 
 /* MAYOR ANOTADOR */
 .ma-card{
   background:#fff;border:1px solid #FEF3C7;border-radius:var(--radius);
@@ -1089,7 +1089,7 @@ table.standings td:nth-child(2){text-align:left;padding-left:12px;font-weight:70
 .ma-pts-box{text-align:center}
 .ma-pts-num{font-size:30px;font-weight:900;color:var(--amber);display:block}
 .ma-pts-label{font-size:9px;font-weight:800;color:var(--muted);letter-spacing:1px}
-
+ 
 /* ═══════════════════════════ STATS MODAL ═══════════════════════════ */
 .modal-overlay{
   display:none;position:fixed;inset:0;background:rgba(15,23,42,.6);
@@ -1107,7 +1107,7 @@ table.standings td:nth-child(2){text-align:left;padding-left:12px;font-weight:70
 .modal-title{font-size:18px;font-weight:900}
 .modal-close{background:none;border:none;font-size:24px;cursor:pointer;color:var(--red);line-height:1}
 .modal-body{overflow-y:auto;padding:24px;flex:1}
-
+ 
 .stats-header-card{
   display:flex;align-items:center;justify-content:space-between;
   background:var(--surface2);border-radius:16px;padding:20px;margin-bottom:12px;
@@ -1138,7 +1138,7 @@ table.standings td:nth-child(2){text-align:left;padding-left:12px;font-weight:70
 }
 .tl-equipo{font-size:13px;font-weight:800;color:var(--text)}
 .tl-tipo{font-size:11px;font-weight:600;color:var(--sub);margin-top:1px}
-
+ 
 /* ═══════════════════════════ NÓMINA ═══════════════════════════ */
 .nomina-ano{margin-bottom:28px}
 .nomina-ano-title{font-size:15px;font-weight:800;color:var(--primary);margin-bottom:12px;padding-bottom:6px;border-bottom:2px solid var(--border)}
@@ -1153,7 +1153,7 @@ table.standings td:nth-child(2){text-align:left;padding-left:12px;font-weight:70
 .nomina-table td{padding:9px 12px;border-bottom:1px solid var(--border)}
 .nomina-table tr:last-child td{border-bottom:none}
 .pts-small{font-weight:700;color:var(--primary)}
-
+ 
 /* ═══════════════════════════ ADMIN ═══════════════════════════ */
 .admin-tabs{display:flex;gap:4px;margin-bottom:20px;background:var(--surface);border-radius:12px;padding:4px;border:1px solid var(--border);width:fit-content}
 .admin-tab{
@@ -1163,7 +1163,7 @@ table.standings td:nth-child(2){text-align:left;padding-left:12px;font-weight:70
 .admin-tab.active{background:var(--primary);color:#fff;box-shadow:0 2px 8px rgba(2,132,199,.3)}
 .admin-tab-content{display:none}
 .admin-tab-content.active{display:block}
-
+ 
 .admin-form{display:grid;grid-template-columns:1fr 1fr;gap:14px;max-width:700px}
 .admin-form .span-2{grid-column:span 2}
 .form-group label{display:block;font-size:10px;font-weight:700;color:var(--sub);text-transform:uppercase;letter-spacing:.6px;margin-bottom:5px}
@@ -1179,7 +1179,7 @@ table.standings td:nth-child(2){text-align:left;padding-left:12px;font-weight:70
 .btn-admin.primary{background:var(--primary);color:#fff;box-shadow:0 2px 8px rgba(2,132,199,.25)}
 .btn-admin.primary:hover{background:var(--primary-dark)}
 .btn-admin:disabled{opacity:.6;cursor:not-allowed}
-
+ 
 .admin-match-card{
   background:#fff;border:1px solid var(--border);border-radius:12px;
   padding:14px 16px;margin-bottom:10px;
@@ -1202,17 +1202,17 @@ table.standings td:nth-child(2){text-align:left;padding-left:12px;font-weight:70
 .amc-btn.stats:hover{background:#DBEAFE}
 .amc-btn.danger{background:#F8FAFC;color:var(--muted)}
 .amc-btn.danger:hover{background:#FEE2E2;color:var(--red)}
-
+ 
 .divider{height:1px;background:var(--border);margin:28px 0}
 .section-subtitle{font-size:15px;font-weight:800;color:var(--text);margin-bottom:16px}
 .team-picker{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:4px}
 .team-picker-label{font-size:11px;font-weight:800;color:var(--primary);margin-bottom:8px;text-transform:uppercase;letter-spacing:.5px}
-
+ 
 /* ═══════════════════════════ MISC ═══════════════════════════ */
 .no-data{color:var(--muted);text-align:center;padding:20px;font-style:italic;font-size:13px}
 .page-title{font-size:20px;font-weight:900;color:var(--text);margin-bottom:20px}
 .section-gap{margin-top:24px}
-
+ 
 /* TOAST */
 #toast-container{position:fixed;bottom:24px;right:24px;z-index:9999;display:flex;flex-direction:column;gap:8px}
 .toast{
@@ -1223,7 +1223,7 @@ table.standings td:nth-child(2){text-align:left;padding-left:12px;font-weight:70
 .toast.show{opacity:1;transform:translateY(0)}
 .toast.success{background:#0F172A;color:#4ADE80;border-left:4px solid #4ADE80}
 .toast.error{background:#0F172A;color:#F87171;border-left:4px solid #F87171}
-
+ 
 /* ═══ REGISTER SCREEN ═══ */
 #screen-register{
   background:linear-gradient(135deg,#001A33 0%,#0284C7 60%,#00D1FF 100%);
@@ -1272,7 +1272,7 @@ table.standings td:nth-child(2){text-align:left;padding-left:12px;font-weight:70
   padding:6px;border-radius:8px;transition:background .15s;
 }
 .reg-back:hover{background:rgba(0,209,255,.12);color:#00D1FF}
-
+ 
 /* Scrollbar */
 ::-webkit-scrollbar{width:6px}
 ::-webkit-scrollbar-track{background:transparent}
@@ -1280,7 +1280,7 @@ table.standings td:nth-child(2){text-align:left;padding-left:12px;font-weight:70
 </style>
 </head>
 <body>
-
+ 
 <!-- ═══════════════════ LOGIN ═══════════════════ -->
 <div id="screen-login" class="screen">
   <div class="auth-card">
@@ -1292,7 +1292,7 @@ table.standings td:nth-child(2){text-align:left;padding-left:12px;font-weight:70
       <span class="auth-title">Intercursos</span>
     </div>
     <p class="auth-subtitle">Inicia sesión con tu cédula y contraseña</p>
-
+ 
     <div class="field-label">Tipo y Nº de Cédula</div>
     <div class="field-row">
       <select id="login-tipo" class="auth-select">
@@ -1309,7 +1309,7 @@ table.standings td:nth-child(2){text-align:left;padding-left:12px;font-weight:70
     </div>
   </div>
 </div>
-
+ 
 <!-- ═══════════════════ REGISTER ═══════════════════ -->
 <div id="screen-register" class="screen">
   <div class="reg-card">
@@ -1320,17 +1320,17 @@ table.standings td:nth-child(2){text-align:left;padding-left:12px;font-weight:70
       <span class="auth-school">E.T. "José Ricardo Guillén Suárez"</span>
     </div>
     <div class="reg-title">CREAR CUENTA</div>
-
+ 
     <div class="reg-field">
       <label class="reg-label">Nombres</label>
       <input id="reg-nombre" class="reg-input" type="text" placeholder="Ej: JUAN CARLOS" maxlength="35" autocomplete="off"/>
     </div>
-
+ 
     <div class="reg-field">
       <label class="reg-label">Apellidos</label>
       <input id="reg-apellido" class="reg-input" type="text" placeholder="Ej: PÉREZ GARCÍA" maxlength="35" autocomplete="off"/>
     </div>
-
+ 
     <div class="reg-field">
       <label class="reg-label">Tipo y Nº de Cédula</label>
       <div class="reg-cedula-row">
@@ -1344,28 +1344,28 @@ table.standings td:nth-child(2){text-align:left;padding-left:12px;font-weight:70
         </div>
       </div>
     </div>
-
+ 
     <div class="reg-field">
       <label class="reg-label">Correo de recuperación</label>
       <input id="reg-email" class="reg-input" type="email" placeholder="usuario@gmail.com" autocomplete="off"/>
     </div>
-
+ 
     <div class="reg-field">
       <label class="reg-label">Contraseña (8-16 caracteres)</label>
       <input id="reg-pass" class="reg-input" type="password" placeholder="Solo letras, números y puntos" maxlength="16" autocomplete="new-password"/>
       <div class="reg-hint">Sin ?, :, ni espacios · No solo números</div>
     </div>
-
+ 
     <div class="reg-field">
       <label class="reg-label">Confirmar contraseña</label>
       <input id="reg-pass-confirm" class="reg-input" type="password" placeholder="Repite tu contraseña" maxlength="16" autocomplete="new-password"/>
     </div>
-
+ 
     <button id="btn-create-account" class="btn-reg-submit">CREAR CUENTA</button>
     <button id="btn-back-from-register" class="reg-back">← Volver al inicio de sesión</button>
   </div>
 </div>
-
+ 
 <!-- ═══════════════════ RECOVER ═══════════════════ -->
 <div id="screen-recover" class="screen">
   <div class="auth-card">
@@ -1373,19 +1373,19 @@ table.standings td:nth-child(2){text-align:left;padding-left:12px;font-weight:70
       <div class="auth-logo-circle">🔑</div>
       <span class="auth-title">Recuperar Acceso</span>
     </div>
-
+ 
     <div id="recover-step-1" class="recover-step active">
       <p class="auth-subtitle">Te enviaremos un código de 6 dígitos a tu Gmail</p>
       <input id="recover-email" class="auth-input" type="email" placeholder="Tu correo registrado"/>
       <button id="btn-send-code" class="btn-primary">ENVIAR CÓDIGO</button>
     </div>
-
+ 
     <div id="recover-step-2" class="recover-step">
       <p class="auth-subtitle">Ingresa el código de 6 dígitos que recibiste</p>
       <input id="recover-code" class="auth-input" type="text" inputmode="numeric" maxlength="6" placeholder="000000" style="text-align:center;font-size:24px;letter-spacing:8px"/>
       <button id="btn-verify-code" class="btn-primary">VERIFICAR CÓDIGO</button>
     </div>
-
+ 
     <div id="recover-step-3" class="recover-step">
       <p class="auth-subtitle">¡Hola, <strong id="rec-username"></strong>! Aquí están tus datos:</p>
       <div class="recover-result-box">
@@ -1396,17 +1396,17 @@ table.standings td:nth-child(2){text-align:left;padding-left:12px;font-weight:70
       </div>
       <button class="btn-primary" onclick="showScreen('login');recoverStep(1)">IR AL LOGIN</button>
     </div>
-
+ 
     <div class="auth-links" style="margin-top:16px">
       <button class="auth-link" id="btn-back-login">← Volver al login</button>
     </div>
     <button id="btn-back-recover" style="display:none"></button>
   </div>
 </div>
-
+ 
 <!-- ═══════════════════ DASHBOARD ═══════════════════ -->
 <div id="screen-dashboard" class="screen">
-
+ 
   <!-- SIDEBAR -->
 <aside class="sidebar">
     <div class="sidebar-brand">
@@ -1418,7 +1418,7 @@ table.standings td:nth-child(2){text-align:left;padding-left:12px;font-weight:70
         <span>Sistema Web</span>
       </div>
     </div>
-
+ 
     <nav class="nav-group">
       <div class="nav-label">MENÚ</div>
       <button class="nav-item" data-section="inicio">
@@ -1428,14 +1428,14 @@ table.standings td:nth-child(2){text-align:left;padding-left:12px;font-weight:70
         <span class="nav-icon">👥</span> Nóminas
       </button>
     </nav>
-
+ 
     <nav class="nav-group" id="nav-admin" style="display:none">
       <div class="nav-label">ADMINISTRACIÓN</div>
       <button class="nav-item" data-section="admin">
         <span class="nav-icon">⚙️</span> Panel Admin
       </button>
     </nav>
-
+ 
     <div class="sidebar-footer">
       <div class="user-card">
         <div class="user-avatar" id="user-avatar">U</div>
@@ -1447,7 +1447,7 @@ table.standings td:nth-child(2){text-align:left;padding-left:12px;font-weight:70
       <button class="btn-logout" id="btn-logout">⬅ Cerrar Sesión</button>
     </div>
   </aside>
-
+ 
   <!-- MAIN -->
   <div class="main-area">
     <div class="topbar">
@@ -1458,13 +1458,13 @@ table.standings td:nth-child(2){text-align:left;padding-left:12px;font-weight:70
         <button class="disc-pill" data-disc="Voleibol">🏐 Voleibol</button>
       </div>
     </div>
-
+ 
     <div class="content">
-
+ 
       <!-- ── INICIO ── -->
       <div id="page-inicio" class="section-page">
         <div class="grid-2">
-
+ 
           <!-- EN VIVO -->
           <div class="card">
             <div class="card-header">
@@ -1473,13 +1473,13 @@ table.standings td:nth-child(2){text-align:left;padding-left:12px;font-weight:70
             </div>
             <div id="live-container"><p class="no-data">Cargando…</p></div>
           </div>
-
+ 
           <!-- PRÓXIMOS -->
           <div class="card">
             <div class="card-header"><span class="card-title">📅 Próximos Partidos</span></div>
             <div id="prox-container"><p class="no-data">Cargando…</p></div>
           </div>
-
+ 
           <!-- MAYOR ANOTADOR -->
           <div id="mayor-anotador" class="card" style="display:none">
             <div class="card-header"><span class="card-title">⭐ Mayor Anotador</span></div>
@@ -1496,15 +1496,15 @@ table.standings td:nth-child(2){text-align:left;padding-left:12px;font-weight:70
               </div>
             </div>
           </div>
-
+ 
           <!-- RESULTADOS -->
           <div class="card">
             <div class="card-header"><span class="card-title">✅ Resultados</span></div>
             <div id="result-container"><p class="no-data">Cargando…</p></div>
           </div>
-
+ 
         </div>
-
+ 
         <!-- TABLA POSICIONES -->
         <div class="card section-gap">
           <div class="card-header"><span class="card-title">📊 Tabla de Posiciones</span></div>
@@ -1525,29 +1525,29 @@ table.standings td:nth-child(2){text-align:left;padding-left:12px;font-weight:70
           </div>
         </div>
       </div>
-
+ 
       <!-- ── NÓMINA ── -->
       <div id="page-nomina" class="section-page">
         <h1 class="page-title">👥 Nóminas — <span id="nomina-disc-title">Fútbol</span></h1>
         <div id="nomina-container"><p class="no-data">Selecciona una disciplina para ver la nómina</p></div>
       </div>
-
+ 
       <!-- ── ADMIN ── -->
       <div id="page-admin" class="section-page">
         <h1 class="page-title">⚙️ Panel Administrativo</h1>
-
+ 
         <div class="admin-tabs">
           <button class="admin-tab active" data-tab="partidos">Partidos</button>
           <button class="admin-tab" data-tab="nuevo">Nuevo Partido</button>
           <button class="admin-tab" data-tab="estudiante">Agregar Estudiante</button>
         </div>
-
+ 
         <!-- TAB: PARTIDOS -->
         <div class="admin-tab-content active" id="atab-partidos">
           <div class="section-subtitle">Todos los Partidos</div>
           <div id="admin-partidos-list"><p class="no-data">Cargando…</p></div>
         </div>
-
+ 
         <!-- TAB: NUEVO PARTIDO -->
         <div class="admin-tab-content" id="atab-nuevo">
           <div class="section-subtitle">Programar Nuevo Partido</div>
@@ -1558,7 +1558,7 @@ table.standings td:nth-child(2){text-align:left;padding-left:12px;font-weight:70
                 <option>Fútbol</option><option>Basket</option><option>Voleibol</option>
               </select>
             </div>
-
+ 
             <div style="grid-column:span 2">
               <div class="team-picker">
                 <div>
@@ -1589,7 +1589,7 @@ table.standings td:nth-child(2){text-align:left;padding-left:12px;font-weight:70
                 </div>
               </div>
             </div>
-
+ 
             <div class="form-group">
               <label>Cancha</label>
               <select id="np-cancha"><option>Cancha 1</option><option>Cancha 2</option></select>
@@ -1607,7 +1607,7 @@ table.standings td:nth-child(2){text-align:left;padding-left:12px;font-weight:70
             </div>
           </div>
         </div>
-
+ 
         <!-- TAB: ESTUDIANTE -->
         <div class="admin-tab-content" id="atab-estudiante">
           <div class="section-subtitle">Inscribir Estudiante en Nómina</div>
@@ -1653,13 +1653,13 @@ table.standings td:nth-child(2){text-align:left;padding-left:12px;font-weight:70
             </div>
           </div>
         </div>
-
+ 
       </div><!-- /page-admin -->
-
+ 
     </div><!-- /content -->
   </div><!-- /main-area -->
 </div><!-- /screen-dashboard -->
-
+ 
 <!-- STATS MODAL -->
 <div id="stats-modal" class="modal-overlay">
   <div class="modal-box">
@@ -1670,10 +1670,10 @@ table.standings td:nth-child(2){text-align:left;padding-left:12px;font-weight:70
     <div class="modal-body" id="stats-modal-body"></div>
   </div>
 </div>
-
+ 
 <!-- TOASTS -->
 <div id="toast-container"></div>
-
+ 
 <script>
 // Sync nomina disc title with pill selection
 document.querySelectorAll('.disc-pill').forEach(p=>{
@@ -1704,3 +1704,4 @@ window.showScreen = function(name){
 </script>
 </body>
 </html>
+ 
