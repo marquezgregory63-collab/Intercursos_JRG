@@ -96,6 +96,14 @@ const firebaseConfig = {
       el.addEventListener('click',()=>activateAdminTab(el.dataset.tab));
     });
     document.getElementById('btn-publish-match').addEventListener('click', publicarPartido);
+    // Aviso en tiempo real si elige sábado o domingo
+    document.getElementById('np-fecha').addEventListener('change', function(){
+      if(!this.value) return;
+      const d = new Date(`${this.value}T12:00:00`).getDay();
+      if(d===0||d===6){
+        toast('Esa fecha es fin de semana, elige lunes a viernes','error');
+      }
+    });
     document.getElementById('btn-register-student').addEventListener('click', registrarEstudiante);
     document.getElementById('btn-go-register').addEventListener('click', () => showScreen('register'));
     document.getElementById('btn-back-from-register').addEventListener('click', () => showScreen('login'));
@@ -720,6 +728,26 @@ const firebaseConfig = {
     const hora   = document.getElementById('np-hora').value;
     if(!fecha||!hora){ toast('Selecciona fecha y hora','error'); return; }
 
+    // ── VALIDACIÓN: no fines de semana ──
+    // new Date('YYYY-MM-DD') se interpreta en UTC; le agregamos hora del mediodía
+    // para evitar que un desfase de zona horaria corra el día al validar.
+    const fechaCheck = new Date(`${fecha}T12:00:00`);
+    const diaSemana = fechaCheck.getDay(); // 0=domingo, 6=sábado
+    if(diaSemana===0||diaSemana===6){
+      toast('No se pueden programar partidos sábado ni domingo','error');
+      return;
+    }
+
+    // ── VALIDACIÓN: horario permitido 7:00am a 6:00pm ──
+    const [hh,mm] = hora.split(':').map(Number);
+    const minutosTotales = hh*60+mm;
+    const minMinutos = 7*60;   // 7:00 am
+    const maxMinutos  = 18*60; // 6:00 pm
+    if(minutosTotales<minMinutos||minutosTotales>maxMinutos){
+      toast('El horario debe estar entre 7:00 am y 6:00 pm','error');
+      return;
+    }
+
     const discId=normDisc(disc);
     const idLocal=generarIdEquipo(ano1,men1,sec1);
     const idVisita=generarIdEquipo(ano2,men2,sec2);
@@ -916,7 +944,7 @@ html,body{height:100%;font-family:var(--font);background:var(--bg);color:var(--t
 .auth-logo-circle{
   width:80px;height:80px;border-radius:50%;background:#fff;
   display:flex;align-items:center;justify-content:center;
-  box-shadow:0 0 0 4px rgba(2,132,199,.18);font-size:40px;
+  box-shadow:0 0 0 4px rgba(2,132,199,.1),0 8px 20px rgba(2,132,199,.18);font-size:40px;
   border:1px solid var(--border);
 }
 .auth-school{color:var(--sub);font-size:11px;font-weight:700;text-align:center;text-transform:uppercase;letter-spacing:.5px}
@@ -928,9 +956,10 @@ html,body{height:100%;font-family:var(--font);background:var(--bg);color:var(--t
 .auth-select,.auth-input{
   background:var(--surface2);border:1.5px solid var(--border);
   border-radius:10px;color:var(--text);padding:12px 14px;font-size:14px;
-  outline:none;transition:border .2s;
+  outline:none;transition:border .2s,box-shadow .2s;
+  box-shadow:0 1px 3px rgba(15,23,42,.04) inset;
 }
-.auth-select:focus,.auth-input:focus{border-color:var(--primary);}
+.auth-select:focus,.auth-input:focus{border-color:var(--primary);box-shadow:0 0 0 3px rgba(2,132,199,.12);}
 .auth-select option{background:#fff;color:var(--text)}
 .auth-select{width:72px;flex-shrink:0}
 .auth-input{width:100%;display:block;margin-bottom:18px}
@@ -958,6 +987,7 @@ html,body{height:100%;font-family:var(--font);background:var(--bg);color:var(--t
 .recover-result-box{
   background:var(--surface2);border:1px solid var(--primary);border-radius:14px;
   padding:20px;text-align:center;margin-bottom:20px;
+  box-shadow:0 4px 16px rgba(2,132,199,.1);
 }
 .recover-label{color:var(--sub);font-size:11px;font-weight:700;text-transform:uppercase;margin-bottom:4px}
 .recover-value{color:var(--primary);font-size:22px;font-weight:900;margin-bottom:12px}
@@ -995,10 +1025,11 @@ html,body{height:100%;font-family:var(--font);background:var(--bg);color:var(--t
   padding:12px 20px;cursor:pointer;border:none;background:none;width:100%;
   color:rgba(255,255,255,.75);font-size:13px;font-weight:600;
   transition:background .15s,color .15s;border-radius:0;text-align:left;
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
 }
 .nav-item:hover{background:rgba(255,255,255,.1);color:#fff}
 .nav-item.active{background:rgba(255,255,255,.18);color:#fff;box-shadow:inset 3px 0 0 #00D1FF}
-.nav-item .nav-icon{font-size:17px;width:20px;text-align:center}
+.nav-item .nav-icon{font-size:17px;width:20px;text-align:center;flex-shrink:0}
 
 .sidebar-footer{margin-top:auto;padding:16px 20px;border-top:1px solid rgba(255,255,255,.12)}
 .user-card{display:flex;align-items:center;gap:10px;margin-bottom:12px}
@@ -1265,9 +1296,10 @@ table.standings td:nth-child(2){text-align:left;padding-left:12px;font-weight:70
 .reg-input{
   width:100%;background:var(--surface2);border:1.5px solid var(--border);
   border-radius:10px;color:var(--text);padding:12px 14px;font-size:14px;outline:none;
-  transition:border .2s;
+  transition:border .2s,box-shadow .2s;
+  box-shadow:0 1px 3px rgba(15,23,42,.04) inset;
 }
-.reg-input:focus{border-color:var(--primary)}
+.reg-input:focus{border-color:var(--primary);box-shadow:0 0 0 3px rgba(2,132,199,.12)}
 .reg-input::placeholder{color:var(--muted)}
 .reg-cedula-row{display:flex;gap:8px;align-items:flex-start}
 .reg-tipo-wrap{display:flex;flex-direction:column;gap:4px;flex-shrink:0}
@@ -1275,8 +1307,9 @@ table.standings td:nth-child(2){text-align:left;padding-left:12px;font-weight:70
   padding:10px 14px;border-radius:9px;border:1.5px solid var(--border);
   background:var(--surface2);color:var(--sub);
   font-weight:800;font-size:13px;cursor:pointer;transition:all .15s;white-space:nowrap;
+  box-shadow:0 1px 3px rgba(15,23,42,.04);
 }
-.reg-tipo-btn.active{background:var(--primary);border-color:var(--primary);color:#fff}
+.reg-tipo-btn.active{background:var(--primary);border-color:var(--primary);color:#fff;box-shadow:0 2px 8px rgba(2,132,199,.25)}
 .reg-tipo-btn:hover:not(.active){background:#E0F2FE}
 .reg-cedula-input{flex:1}
 .reg-hint{color:var(--muted);font-size:11px;margin-top:4px}
@@ -1391,8 +1424,17 @@ table.standings td:nth-child(2){text-align:left;padding-left:12px;font-weight:70
   .admin-form{grid-template-columns:1fr;max-width:100%}
   .admin-form .span-2{grid-column:span 1}
   .team-picker{grid-template-columns:1fr;gap:18px}
-  .admin-tabs{width:100%;overflow-x:auto}
-  .admin-tab{flex-shrink:0}
+  .team-picker-label{white-space:normal;line-height:1.3}
+  .admin-tabs{
+    width:100%;max-width:100%;overflow-x:auto;
+    -webkit-overflow-scrolling:touch;
+    flex-wrap:nowrap;
+  }
+  .admin-tab{flex-shrink:0;white-space:nowrap;padding:8px 14px;font-size:11px}
+  .admin-match-card{padding:12px}
+  .amc-teams{font-size:13px}
+  .amc-actions{gap:6px}
+  .amc-btn{padding:6px 10px;font-size:10px}
 
   /* Auth cards (login/registro/recuperar): ancho fluido */
   .auth-card{width:92vw;padding:32px 22px}
@@ -1742,10 +1784,12 @@ table.standings td:nth-child(2){text-align:left;padding-left:12px;font-weight:70
             <div class="form-group">
               <label>Fecha</label>
               <input id="np-fecha" type="date"/>
+              <div class="reg-hint">Solo días de lunes a viernes</div>
             </div>
             <div class="form-group">
               <label>Hora</label>
-              <input id="np-hora" type="time"/>
+              <input id="np-hora" type="time" min="07:00" max="18:00"/>
+              <div class="reg-hint">Entre 7:00 am y 6:00 pm</div>
             </div>
             <div class="span-2">
               <button id="btn-publish-match" class="btn-admin primary">📅 PUBLICAR PARTIDO</button>
