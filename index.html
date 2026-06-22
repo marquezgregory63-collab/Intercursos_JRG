@@ -83,7 +83,10 @@ const firebaseConfig = {
     document.getElementById('btn-back-recover').addEventListener('click', ()=>{ recoverStep(1); showScreen('login'); });
     document.getElementById('btn-logout').addEventListener('click', handleLogout);
     document.querySelectorAll('.nav-item').forEach(el=>{
-      el.addEventListener('click',()=> activateSection(el.dataset.section));
+      el.addEventListener('click',()=>{
+        activateSection(el.dataset.section);
+        closeMobileSidebar();
+      });
     });
     document.querySelectorAll('.disc-pill').forEach(el=>{
       el.addEventListener('click',()=> changeDisciplina(el.dataset.disc));
@@ -97,6 +100,11 @@ const firebaseConfig = {
     document.getElementById('btn-go-register').addEventListener('click', () => showScreen('register'));
     document.getElementById('btn-back-from-register').addEventListener('click', () => showScreen('login'));
     document.getElementById('btn-create-account').addEventListener('click', handleRegistro);
+
+    // Menú móvil (sidebar tipo drawer)
+    document.getElementById('hamburger-btn').addEventListener('click', openMobileSidebar);
+    document.getElementById('sidebar-close-btn').addEventListener('click', closeMobileSidebar);
+    document.getElementById('sidebar-overlay').addEventListener('click', closeMobileSidebar);
     // Tipo doc toggle register
     document.querySelectorAll('.reg-tipo-btn').forEach(btn => {
       btn.addEventListener('click', () => {
@@ -296,6 +304,18 @@ const firebaseConfig = {
     });
     subscribeData();
     renderNominaPage();
+  }
+
+  // ══════════════════════════════════════════════════
+  //  MENÚ MÓVIL (SIDEBAR DRAWER)
+  // ══════════════════════════════════════════════════
+  function openMobileSidebar(){
+    document.getElementById('sidebar').classList.add('open');
+    document.getElementById('sidebar-overlay').classList.add('active');
+  }
+  function closeMobileSidebar(){
+    document.getElementById('sidebar').classList.remove('open');
+    document.getElementById('sidebar-overlay').classList.remove('active');
   }
 
   // ══════════════════════════════════════════════════
@@ -881,66 +901,66 @@ html,body{height:100%;font-family:var(--font);background:var(--bg);color:var(--t
 
 /* ═══════════════════════════ LOGIN ═══════════════════════════ */
 #screen-login,#screen-recover{
-  background:linear-gradient(135deg,#001A33 0%,#0284C7 60%,#00D1FF 100%);
+  background:#FFFFFF;
   align-items:center;justify-content:center;
 }
 .auth-card{
-  background:rgba(255,255,255,.08);
-  backdrop-filter:blur(24px);
-  border:1px solid rgba(255,255,255,.18);
+  background:#FFFFFF;
+  border:1px solid var(--border);
   border-radius:24px;
   padding:44px 40px;
   width:420px;
-  box-shadow:0 24px 64px rgba(0,0,0,.35);
+  box-shadow:0 16px 48px rgba(2,132,199,.12);
 }
 .auth-logo{display:flex;flex-direction:column;align-items:center;margin-bottom:32px;gap:10px}
 .auth-logo-circle{
   width:80px;height:80px;border-radius:50%;background:#fff;
   display:flex;align-items:center;justify-content:center;
-  box-shadow:0 0 0 4px rgba(0,209,255,.3);font-size:40px;
+  box-shadow:0 0 0 4px rgba(2,132,199,.18);font-size:40px;
+  border:1px solid var(--border);
 }
-.auth-school{color:rgba(255,255,255,.85);font-size:11px;font-weight:700;text-align:center;text-transform:uppercase;letter-spacing:.5px}
-.auth-title{color:#00D1FF;font-size:28px;font-weight:900;letter-spacing:1px}
-.auth-subtitle{color:rgba(255,255,255,.7);font-size:13px;text-align:center;margin-bottom:24px}
+.auth-school{color:var(--sub);font-size:11px;font-weight:700;text-align:center;text-transform:uppercase;letter-spacing:.5px}
+.auth-title{color:var(--primary);font-size:28px;font-weight:900;letter-spacing:1px}
+.auth-subtitle{color:var(--sub);font-size:13px;text-align:center;margin-bottom:24px}
 
-.field-label{color:rgba(255,255,255,.75);font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;margin-bottom:6px}
+.field-label{color:var(--sub);font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;margin-bottom:6px}
 .field-row{display:flex;gap:8px;margin-bottom:18px}
 .auth-select,.auth-input{
-  background:rgba(255,255,255,.1);border:1px solid rgba(255,255,255,.2);
-  border-radius:10px;color:#fff;padding:12px 14px;font-size:14px;
+  background:var(--surface2);border:1.5px solid var(--border);
+  border-radius:10px;color:var(--text);padding:12px 14px;font-size:14px;
   outline:none;transition:border .2s;
 }
-.auth-select:focus,.auth-input:focus{border-color:#00D1FF;}
-.auth-select option{background:#001A33}
+.auth-select:focus,.auth-input:focus{border-color:var(--primary);}
+.auth-select option{background:#fff;color:var(--text)}
 .auth-select{width:72px;flex-shrink:0}
 .auth-input{width:100%;display:block;margin-bottom:18px}
-.auth-input::placeholder{color:rgba(255,255,255,.35)}
+.auth-input::placeholder{color:var(--muted)}
 .auth-input[type=password]{letter-spacing:2px}
 
 .btn-primary{
   width:100%;padding:14px;border:none;border-radius:12px;
-  background:#00D1FF;color:#001A33;font-weight:900;font-size:15px;
+  background:var(--primary);color:#fff;font-weight:900;font-size:15px;
   letter-spacing:.5px;cursor:pointer;transition:background .15s,transform .1s;
-  box-shadow:0 4px 16px rgba(0,209,255,.3);
+  box-shadow:0 4px 16px rgba(2,132,199,.25);
 }
-.btn-primary:hover{background:#00B8E0}
+.btn-primary:hover{background:var(--primary-dark)}
 .btn-primary:active{transform:scale(.98)}
 .btn-primary:disabled{opacity:.6;cursor:not-allowed}
 
 .auth-links{margin-top:20px;display:flex;flex-direction:column;gap:8px;align-items:center}
-.auth-link{background:none;border:none;color:rgba(255,255,255,.75);font-size:13px;cursor:pointer;text-decoration:underline;padding:4px}
-.auth-link:hover{color:#00D1FF}
-.auth-link b{color:#00D1FF}
+.auth-link{background:none;border:none;color:var(--sub);font-size:13px;cursor:pointer;text-decoration:underline;padding:4px}
+.auth-link:hover{color:var(--primary)}
+.auth-link b{color:var(--primary)}
 
 /* Recover steps */
 .recover-step{display:none}
 .recover-step.active{display:block}
 .recover-result-box{
-  background:rgba(0,0,0,.25);border:1px solid #00D1FF;border-radius:14px;
+  background:var(--surface2);border:1px solid var(--primary);border-radius:14px;
   padding:20px;text-align:center;margin-bottom:20px;
 }
-.recover-label{color:rgba(255,255,255,.7);font-size:11px;font-weight:700;text-transform:uppercase;margin-bottom:4px}
-.recover-value{color:#00D1FF;font-size:22px;font-weight:900;margin-bottom:12px}
+.recover-label{color:var(--sub);font-size:11px;font-weight:700;text-transform:uppercase;margin-bottom:4px}
+.recover-value{color:var(--primary);font-size:22px;font-weight:900;margin-bottom:12px}
 
 /* ═══════════════════════════ DASHBOARD ═══════════════════════════ */
 #screen-dashboard{flex-direction:row;overflow:hidden}
@@ -951,7 +971,11 @@ html,body{height:100%;font-family:var(--font);background:var(--bg);color:var(--t
   background:linear-gradient(180deg,#0369A1 0%,#0284C7 100%);
   display:flex;flex-direction:column;flex-shrink:0;
   box-shadow:4px 0 20px rgba(0,0,0,.12);z-index:10;
+  position:relative;
 }
+.sidebar-close-btn{display:none}
+.sidebar-overlay{display:none}
+.hamburger-btn{display:none}
 .sidebar-brand{
   padding:24px 20px;display:flex;align-items:center;gap:12px;
   border-bottom:1px solid rgba(255,255,255,.12);
@@ -1226,57 +1250,170 @@ table.standings td:nth-child(2){text-align:left;padding-left:12px;font-weight:70
 
 /* ═══ REGISTER SCREEN ═══ */
 #screen-register{
-  background:linear-gradient(135deg,#001A33 0%,#0284C7 60%,#00D1FF 100%);
+  background:#FFFFFF;
   align-items:center;justify-content:center;overflow-y:auto;padding:30px 0;
 }
 .reg-card{
-  background:rgba(255,255,255,.08);backdrop-filter:blur(24px);
-  border:1px solid rgba(255,255,255,.18);border-radius:24px;
+  background:#FFFFFF;border:1px solid var(--border);border-radius:24px;
   padding:40px 36px;width:440px;max-width:95vw;
-  box-shadow:0 24px 64px rgba(0,0,0,.35);
+  box-shadow:0 16px 48px rgba(2,132,199,.12);
 }
-.reg-title{color:#00D1FF;font-size:22px;font-weight:900;letter-spacing:1px;text-align:center;margin-bottom:28px}
+.reg-title{color:var(--primary);font-size:22px;font-weight:900;letter-spacing:1px;text-align:center;margin-bottom:28px}
 .reg-field{margin-bottom:16px}
-.reg-label{color:rgba(255,255,255,.8);font-size:10px;font-weight:700;
+.reg-label{color:var(--sub);font-size:10px;font-weight:700;
   text-transform:uppercase;letter-spacing:.8px;margin-bottom:6px;display:block}
 .reg-input{
-  width:100%;background:rgba(255,255,255,.1);border:1px solid rgba(255,255,255,.2);
-  border-radius:10px;color:#fff;padding:12px 14px;font-size:14px;outline:none;
+  width:100%;background:var(--surface2);border:1.5px solid var(--border);
+  border-radius:10px;color:var(--text);padding:12px 14px;font-size:14px;outline:none;
   transition:border .2s;
 }
-.reg-input:focus{border-color:#00D1FF}
-.reg-input::placeholder{color:rgba(255,255,255,.35)}
+.reg-input:focus{border-color:var(--primary)}
+.reg-input::placeholder{color:var(--muted)}
 .reg-cedula-row{display:flex;gap:8px;align-items:flex-start}
 .reg-tipo-wrap{display:flex;flex-direction:column;gap:4px;flex-shrink:0}
 .reg-tipo-btn{
-  padding:10px 14px;border-radius:9px;border:1.5px solid rgba(255,255,255,.25);
-  background:rgba(255,255,255,.08);color:rgba(255,255,255,.8);
+  padding:10px 14px;border-radius:9px;border:1.5px solid var(--border);
+  background:var(--surface2);color:var(--sub);
   font-weight:800;font-size:13px;cursor:pointer;transition:all .15s;white-space:nowrap;
 }
-.reg-tipo-btn.active{background:#00D1FF;border-color:#00D1FF;color:#001A33}
-.reg-tipo-btn:hover:not(.active){background:rgba(255,255,255,.15)}
+.reg-tipo-btn.active{background:var(--primary);border-color:var(--primary);color:#fff}
+.reg-tipo-btn:hover:not(.active){background:#E0F2FE}
 .reg-cedula-input{flex:1}
-.reg-hint{color:rgba(255,255,255,.45);font-size:11px;margin-top:4px}
+.reg-hint{color:var(--muted);font-size:11px;margin-top:4px}
 .btn-reg-submit{
   width:100%;padding:14px;border:none;border-radius:12px;margin-top:8px;
-  background:#00D1FF;color:#001A33;font-weight:900;font-size:15px;
+  background:var(--primary);color:#fff;font-weight:900;font-size:15px;
   letter-spacing:.5px;cursor:pointer;transition:background .15s,transform .1s;
-  box-shadow:0 4px 16px rgba(0,209,255,.3);
+  box-shadow:0 4px 16px rgba(2,132,199,.25);
 }
-.btn-reg-submit:hover{background:#00B8E0}
+.btn-reg-submit:hover{background:var(--primary-dark)}
 .btn-reg-submit:active{transform:scale(.98)}
 .btn-reg-submit:disabled{opacity:.6;cursor:not-allowed}
 .reg-back{
-  background:none;border:none;color:rgba(255,255,255,.65);
+  background:none;border:none;color:var(--sub);
   font-size:13px;cursor:pointer;margin-top:16px;display:block;width:100%;text-align:center;
   padding:6px;border-radius:8px;transition:background .15s;
 }
-.reg-back:hover{background:rgba(0,209,255,.12);color:#00D1FF}
+.reg-back:hover{background:#E0F2FE;color:var(--primary)}
 
 /* Scrollbar */
 ::-webkit-scrollbar{width:6px}
 ::-webkit-scrollbar-track{background:transparent}
 ::-webkit-scrollbar-thumb{background:var(--border);border-radius:4px}
+
+/* ═══════════════════════════ RESPONSIVE ═══════════════════════════ */
+
+/* ── TABLET (≤ 1024px): sidebar más angosta, grids a 1 columna ── */
+@media (max-width:1024px){
+  :root{--sidebar:200px}
+  .grid-3{grid-template-columns:1fr 1fr}
+  .col-span-2{grid-column:span 1}
+}
+
+/* ── MÓVIL (≤ 768px): sidebar pasa a ser drawer deslizable ── */
+@media (max-width:768px){
+
+  /* Sidebar: oculto fuera de pantalla, se desliza al abrir */
+  .sidebar{
+    position:fixed;top:0;left:0;height:100vh;width:78vw;max-width:300px;
+    transform:translateX(-100%);
+    transition:transform .25s ease;
+    z-index:200;
+  }
+  .sidebar.open{transform:translateX(0)}
+  .sidebar-close-btn{
+    display:flex;align-items:center;justify-content:center;
+    position:absolute;top:14px;right:14px;width:32px;height:32px;
+    background:rgba(255,255,255,.15);border:none;border-radius:8px;
+    color:#fff;font-size:16px;cursor:pointer;z-index:5;
+  }
+
+  /* Overlay oscuro detrás del sidebar abierto */
+  .sidebar-overlay{
+    display:none;position:fixed;inset:0;background:rgba(15,23,42,.5);
+    z-index:150;
+  }
+  .sidebar-overlay.active{display:block}
+
+  /* Botón hamburguesa visible solo en móvil */
+  .hamburger-btn{
+    display:flex;flex-direction:column;justify-content:center;gap:4px;
+    width:34px;height:34px;border:none;background:none;cursor:pointer;
+    flex-shrink:0;padding:0;
+  }
+  .hamburger-btn span{
+    display:block;width:22px;height:2.5px;background:var(--text);border-radius:2px;
+  }
+
+  /* Topbar: stack vertical, evita que todo se amontone en una fila */
+  .topbar{
+    height:auto;min-height:var(--header);
+    flex-wrap:wrap;padding:10px 14px;gap:10px;
+  }
+  .topbar-title{font-size:15px;flex:1 1 auto;min-width:0}
+  .disc-pills{
+    width:100%;order:3;
+    overflow-x:auto;-webkit-overflow-scrolling:touch;
+    padding-bottom:2px;
+  }
+  .disc-pill{padding:6px 12px;font-size:11px;white-space:nowrap;flex-shrink:0}
+
+  /* Contenido: menos padding lateral */
+  .content{padding:16px 14px}
+
+  /* Grids: todo a 1 columna en móvil */
+  .grid-2,.grid-3{grid-template-columns:1fr;gap:14px}
+  .col-span-2{grid-column:span 1}
+
+  /* Cards más compactas */
+  .card{padding:14px}
+  .page-title{font-size:17px}
+
+  /* Match cards: evita que nombre de equipo + score se desborden */
+  .match-row{flex-wrap:wrap;gap:6px}
+  .team-name{font-size:12px}
+  .score{font-size:18px}
+
+  /* Tabla de posiciones: scroll horizontal en vez de comprimirse */
+  .tabla-wrap{overflow-x:auto}
+  table.standings{min-width:560px}
+
+  /* Mayor anotador: columna en vez de fila */
+  .ma-card{flex-wrap:wrap}
+  .ma-pts-box{width:100%;text-align:left;display:flex;align-items:center;gap:8px;margin-top:4px}
+
+  /* Modal de estadísticas: ocupa casi todo el ancho */
+  .modal-box{width:94vw;max-height:90vh}
+  .stats-team{font-size:12px}
+  .stats-score{font-size:28px;padding:0 10px}
+
+  /* Admin: formularios y team-picker a 1 columna */
+  .admin-form{grid-template-columns:1fr;max-width:100%}
+  .admin-form .span-2{grid-column:span 1}
+  .team-picker{grid-template-columns:1fr;gap:18px}
+  .admin-tabs{width:100%;overflow-x:auto}
+  .admin-tab{flex-shrink:0}
+
+  /* Auth cards (login/registro/recuperar): ancho fluido */
+  .auth-card{width:92vw;padding:32px 22px}
+  .reg-card{width:92vw;padding:28px 20px}
+  .reg-cedula-row{flex-wrap:wrap}
+  .reg-tipo-wrap{flex-direction:row;width:100%}
+  .reg-tipo-btn{flex:1}
+
+  /* Cuadritos del código de recuperación: que no se encimen */
+  .recover-value{font-size:18px}
+}
+
+/* ── MÓVIL CHICO (≤ 400px): ajustes finales ── */
+@media (max-width:400px){
+  .auth-title{font-size:22px}
+  .auth-card{padding:26px 16px}
+  .field-row{gap:6px}
+  .auth-select{width:60px}
+  .topbar-title{font-size:13px}
+  .sidebar{width:84vw}
+}
 </style>
 </head>
 <body>
@@ -1408,7 +1545,8 @@ table.standings td:nth-child(2){text-align:left;padding-left:12px;font-weight:70
 <div id="screen-dashboard" class="screen">
 
   <!-- SIDEBAR -->
-<aside class="sidebar">
+<aside class="sidebar" id="sidebar">
+    <button class="sidebar-close-btn" id="sidebar-close-btn" aria-label="Cerrar menú">✕</button>
     <div class="sidebar-brand">
       <div class="sidebar-icon">
         <img src="https://blogger.googleusercontent.com/img/b/R29vZ2xl/AVvXsEj5yrnVHe7Gz22KcG6PxEzmNmsythIE_Db-t3SgWjgcy3fbY52NE5aapHu1vmp4MXfrpsqi1G5igOxLHq289c3vSHmXmHFtXKB1EiAdEDegcakac55eEmx7UllCug4umw/s220/Liceo.jpg" alt="Logo Liceo" style="width: 100%; height: 100%; border-radius: 50%; object-fit: cover;" />
@@ -1448,9 +1586,16 @@ table.standings td:nth-child(2){text-align:left;padding-left:12px;font-weight:70
     </div>
   </aside>
 
+  <!-- OVERLAY (solo móvil, detrás del sidebar abierto) -->
+  <div class="sidebar-overlay" id="sidebar-overlay"></div>
+
+
   <!-- MAIN -->
   <div class="main-area">
     <div class="topbar">
+      <button class="hamburger-btn" id="hamburger-btn" aria-label="Abrir menú">
+        <span></span><span></span><span></span>
+      </button>
       <span class="topbar-title" id="topbar-title">Dashboard</span>
       <div class="disc-pills">
         <button class="disc-pill active" data-disc="Fútbol">⚽ Fútbol</button>
