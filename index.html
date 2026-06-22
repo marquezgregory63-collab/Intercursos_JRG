@@ -94,6 +94,43 @@ const firebaseConfig = {
     });
     document.getElementById('btn-publish-match').addEventListener('click', publicarPartido);
     document.getElementById('btn-register-student').addEventListener('click', registrarEstudiante);
+    document.getElementById('btn-go-register').addEventListener('click', () => showScreen('register'));
+    document.getElementById('btn-back-from-register').addEventListener('click', () => showScreen('login'));
+    document.getElementById('btn-create-account').addEventListener('click', handleRegistro);
+    // Tipo doc toggle register
+    document.querySelectorAll('.reg-tipo-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        document.querySelectorAll('.reg-tipo-btn').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+        const tipo = btn.dataset.tipo;
+        const maxLen = tipo === 'V' ? 8 : 9;
+        const ph     = tipo === 'V' ? '7 u 8 dígitos' : '6 a 9 dígitos';
+        document.getElementById('reg-cedula').maxLength = maxLen;
+        document.getElementById('reg-cedula').placeholder = ph;
+      });
+    });
+    // Real-time password filter: only letters, numbers, dots
+    ['reg-pass','reg-pass-confirm'].forEach(id => {
+      document.getElementById(id).addEventListener('input', function() {
+        const cur = this.selectionStart;
+        this.value = this.value.replace(/[^a-zA-Z0-9.]/g, '');
+        this.setSelectionRange(cur, cur);
+      });
+    });
+    // Real-time name filter: only letters
+    ['reg-nombre','reg-apellido'].forEach(id => {
+      document.getElementById(id).addEventListener('input', function() {
+        const cur = this.selectionStart;
+        this.value = this.value.replace(/[^a-zA-ZáéíóúÁÉÍÓÚàèìòùÀÈÌÒÙñÑüÜ\s]/g, '').toUpperCase();
+        this.setSelectionRange(cur, cur);
+      });
+    });
+    // Real-time cedula filter: only numbers
+    document.getElementById('reg-cedula').addEventListener('input', function() {
+      const cur = this.selectionStart;
+      this.value = this.value.replace(/[^0-9]/g, '');
+      this.setSelectionRange(cur, cur);
+    });
   }
 
   // ══════════════════════════════════════════════════
@@ -721,6 +758,92 @@ const firebaseConfig = {
   }
 
   // ══════════════════════════════════════════════════
+  //  REGISTRO DE CUENTA
+  // ══════════════════════════════════════════════════
+  const validarEmailReg = (email) => {
+    const rx = /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/;
+    if (!rx.test(email)) return { valido: false, msj: 'El formato del correo es inválido.' };
+    const [, dom] = email.split('@');
+    const partes = dom.split('.');
+    const nombre = partes[0];
+    const ext    = partes[partes.length - 1];
+    const malDom = ['gmai','hotmai','outloo','yaho','iclou'];
+    const malExt = ['c','co','con','comn','comm','ne','nett'];
+    if (malDom.includes(nombre)) return { valido: false, msj: `Dominio incorrecto: "${nombre}".` };
+    if (malExt.includes(ext))    return { valido: false, msj: `Extensión inválida: ".${ext}".` };
+    if (nombre === 'gmail'   && ext !== 'com') return { valido: false, msj: 'Gmail siempre termina en .com' };
+    if (nombre === 'hotmail' && !['com','es'].includes(ext)) return { valido: false, msj: 'Hotmail: .com o .es' };
+    if (nombre === 'outlook' && !['com','es'].includes(ext)) return { valido: false, msj: 'Outlook: .com o .es' };
+    return { valido: true, msj: '' };
+  };
+
+  const validarPassReg = (p) => {
+    if (!p || p.length < 8)  return { valido: false, msj: 'Mínimo 8 caracteres.' };
+    if (p.length > 16)       return { valido: false, msj: 'Máximo 16 caracteres.' };
+    if (/[^a-zA-Z0-9.]/.test(p)) return { valido: false, msj: 'Solo letras, números y puntos.' };
+    if (/^\d+$/.test(p))    return { valido: false, msj: 'No puede ser solo números.' };
+    return { valido: true, msj: '' };
+  };
+
+  async function handleRegistro() {
+    const tipoBtn  = document.querySelector('.reg-tipo-btn.active');
+    const tipoDoc  = tipoBtn ? tipoBtn.dataset.tipo : 'V';
+    const nom      = document.getElementById('reg-nombre').value.trim();
+    const ape      = document.getElementById('reg-apellido').value.trim();
+    const cedNums  = document.getElementById('reg-cedula').value.trim();
+    const mail     = document.getElementById('reg-email').value.trim().toLowerCase();
+    const pass     = document.getElementById('reg-pass').value;
+    const conf     = document.getElementById('reg-pass-confirm').value;
+    const cedulaFull = `${tipoDoc}${cedNums}`;
+
+    if (!nom || !ape || !cedNums || !mail || !pass || !conf) {
+      toast('Completa todos los campos', 'error'); return;
+    }
+    if (nom.replace(/\s/g,'').length < 2) { toast('Nombre demasiado corto', 'error'); return; }
+    if (ape.replace(/\s/g,'').length < 2) { toast('Apellido demasiado corto', 'error'); return; }
+
+    const longMin = tipoDoc === 'V' ? 7 : 6;
+    const longMax = tipoDoc === 'V' ? 8 : 9;
+    if (cedNums.length < longMin || cedNums.length > longMax) {
+      toast(tipoDoc === 'V' ? 'Cédula venezolana: 7 u 8 dígitos' : 'Cédula extranjera: 6 a 9 dígitos', 'error'); return;
+    }
+    const ve = validarEmailReg(mail);
+    if (!ve.valido) { toast(ve.msj, 'error'); return; }
+    const vp = validarPassReg(pass);
+    if (!vp.valido) { toast(vp.msj, 'error'); return; }
+    if (pass !== conf) { toast('Las contraseñas no coinciden', 'error'); return; }
+
+    const btn = document.getElementById('btn-create-account');
+    btn.disabled = true; btn.textContent = 'Creando cuenta…';
+    try {
+      // Verificar cédula duplicada
+      const q = query(collection(db,'usuarios'), where('cedula','==', cedulaFull));
+      const snap = await getDocs(q);
+      if (!snap.empty) { toast('Esta cédula ya está registrada', 'error'); return; }
+
+      // Guardar en Firestore (sin Firebase Auth en web — igual que el resto del sistema)
+      await addDoc(collection(db, 'usuarios'), {
+        cedula: cedulaFull, tipoDocumento: tipoDoc,
+        nombre: nom, apellido: ape,
+        emailRecuperacion: mail, password: pass,
+        rol: 'estudiante', fechaRegistro: serverTimestamp(),
+        id_ano: '1', seccion: 'A', disciplina: 'Ninguna', intercursos_inscrito: false,
+      });
+      toast('¡Cuenta creada! Ya puedes iniciar sesión.', 'success');
+      setTimeout(() => {
+        showScreen('login');
+        document.getElementById('reg-nombre').value = '';
+        document.getElementById('reg-apellido').value = '';
+        document.getElementById('reg-cedula').value = '';
+        document.getElementById('reg-email').value = '';
+        document.getElementById('reg-pass').value = '';
+        document.getElementById('reg-pass-confirm').value = '';
+      }, 1800);
+    } catch(e) { toast('Error de conexión. Intenta más tarde.', 'error'); }
+    finally { btn.disabled = false; btn.textContent = 'CREAR CUENTA'; }
+  }
+
+  // ══════════════════════════════════════════════════
   //  TOAST
   // ══════════════════════════════════════════════════
   window.toast = function(msg,type='success'){
@@ -1101,6 +1224,55 @@ table.standings td:nth-child(2){text-align:left;padding-left:12px;font-weight:70
 .toast.success{background:#0F172A;color:#4ADE80;border-left:4px solid #4ADE80}
 .toast.error{background:#0F172A;color:#F87171;border-left:4px solid #F87171}
 
+/* ═══ REGISTER SCREEN ═══ */
+#screen-register{
+  background:linear-gradient(135deg,#001A33 0%,#0284C7 60%,#00D1FF 100%);
+  align-items:center;justify-content:center;overflow-y:auto;padding:30px 0;
+}
+.reg-card{
+  background:rgba(255,255,255,.08);backdrop-filter:blur(24px);
+  border:1px solid rgba(255,255,255,.18);border-radius:24px;
+  padding:40px 36px;width:440px;max-width:95vw;
+  box-shadow:0 24px 64px rgba(0,0,0,.35);
+}
+.reg-title{color:#00D1FF;font-size:22px;font-weight:900;letter-spacing:1px;text-align:center;margin-bottom:28px}
+.reg-field{margin-bottom:16px}
+.reg-label{color:rgba(255,255,255,.8);font-size:10px;font-weight:700;
+  text-transform:uppercase;letter-spacing:.8px;margin-bottom:6px;display:block}
+.reg-input{
+  width:100%;background:rgba(255,255,255,.1);border:1px solid rgba(255,255,255,.2);
+  border-radius:10px;color:#fff;padding:12px 14px;font-size:14px;outline:none;
+  transition:border .2s;
+}
+.reg-input:focus{border-color:#00D1FF}
+.reg-input::placeholder{color:rgba(255,255,255,.35)}
+.reg-cedula-row{display:flex;gap:8px;align-items:flex-start}
+.reg-tipo-wrap{display:flex;flex-direction:column;gap:4px;flex-shrink:0}
+.reg-tipo-btn{
+  padding:10px 14px;border-radius:9px;border:1.5px solid rgba(255,255,255,.25);
+  background:rgba(255,255,255,.08);color:rgba(255,255,255,.8);
+  font-weight:800;font-size:13px;cursor:pointer;transition:all .15s;white-space:nowrap;
+}
+.reg-tipo-btn.active{background:#00D1FF;border-color:#00D1FF;color:#001A33}
+.reg-tipo-btn:hover:not(.active){background:rgba(255,255,255,.15)}
+.reg-cedula-input{flex:1}
+.reg-hint{color:rgba(255,255,255,.45);font-size:11px;margin-top:4px}
+.btn-reg-submit{
+  width:100%;padding:14px;border:none;border-radius:12px;margin-top:8px;
+  background:#00D1FF;color:#001A33;font-weight:900;font-size:15px;
+  letter-spacing:.5px;cursor:pointer;transition:background .15s,transform .1s;
+  box-shadow:0 4px 16px rgba(0,209,255,.3);
+}
+.btn-reg-submit:hover{background:#00B8E0}
+.btn-reg-submit:active{transform:scale(.98)}
+.btn-reg-submit:disabled{opacity:.6;cursor:not-allowed}
+.reg-back{
+  background:none;border:none;color:rgba(255,255,255,.65);
+  font-size:13px;cursor:pointer;margin-top:16px;display:block;width:100%;text-align:center;
+  padding:6px;border-radius:8px;transition:background .15s;
+}
+.reg-back:hover{background:rgba(0,209,255,.12);color:#00D1FF}
+
 /* Scrollbar */
 ::-webkit-scrollbar{width:6px}
 ::-webkit-scrollbar-track{background:transparent}
@@ -1132,8 +1304,65 @@ table.standings td:nth-child(2){text-align:left;padding-left:12px;font-weight:70
     <input id="login-pass" class="auth-input" type="password" placeholder="Contraseña" maxlength="16"/>
     <button id="btn-login" class="btn-primary">ACCEDER</button>
     <div class="auth-links">
+      <button class="auth-link" id="btn-go-register">¿No tienes cuenta? <b>CREAR CUENTA</b></button>
       <button class="auth-link" id="btn-recover">¿Olvidaste tus datos? <b>RECUPERAR</b></button>
     </div>
+  </div>
+</div>
+
+<!-- ═══════════════════ REGISTER ═══════════════════ -->
+<div id="screen-register" class="screen">
+  <div class="reg-card">
+    <div class="auth-logo" style="margin-bottom:20px">
+      <div class="auth-logo-circle">
+        <img src="https://blogger.googleusercontent.com/img/b/R29vZ2xl/AVvXsEj5yrnVHe7Gz22KcG6PxEzmNmsythIE_Db-t3SgWjgcy3fbY52NE5aapHu1vmp4MXfrpsqi1G5igOxLHq289c3vSHmXmHFtXKB1EiAdEDegcakac55eEmx7UllCug4umw/s220/Liceo.jpg" alt="Logo" style="width:100%;height:100%;border-radius:50%;object-fit:cover"/>
+      </div>
+      <span class="auth-school">E.T. "José Ricardo Guillén Suárez"</span>
+    </div>
+    <div class="reg-title">CREAR CUENTA</div>
+
+    <div class="reg-field">
+      <label class="reg-label">Nombres</label>
+      <input id="reg-nombre" class="reg-input" type="text" placeholder="Ej: JUAN CARLOS" maxlength="35" autocomplete="off"/>
+    </div>
+
+    <div class="reg-field">
+      <label class="reg-label">Apellidos</label>
+      <input id="reg-apellido" class="reg-input" type="text" placeholder="Ej: PÉREZ GARCÍA" maxlength="35" autocomplete="off"/>
+    </div>
+
+    <div class="reg-field">
+      <label class="reg-label">Tipo y Nº de Cédula</label>
+      <div class="reg-cedula-row">
+        <div class="reg-tipo-wrap">
+          <button class="reg-tipo-btn active" data-tipo="V">V — Venezolano</button>
+          <button class="reg-tipo-btn" data-tipo="E">E — Extranjero</button>
+        </div>
+        <div class="reg-cedula-input">
+          <input id="reg-cedula" class="reg-input" type="text" inputmode="numeric" placeholder="7 u 8 dígitos" maxlength="8" autocomplete="off"/>
+          <div class="reg-hint">Solo números, sin puntos ni comas</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="reg-field">
+      <label class="reg-label">Correo de recuperación</label>
+      <input id="reg-email" class="reg-input" type="email" placeholder="usuario@gmail.com" autocomplete="off"/>
+    </div>
+
+    <div class="reg-field">
+      <label class="reg-label">Contraseña (8-16 caracteres)</label>
+      <input id="reg-pass" class="reg-input" type="password" placeholder="Solo letras, números y puntos" maxlength="16" autocomplete="new-password"/>
+      <div class="reg-hint">Sin ?, :, ni espacios · No solo números</div>
+    </div>
+
+    <div class="reg-field">
+      <label class="reg-label">Confirmar contraseña</label>
+      <input id="reg-pass-confirm" class="reg-input" type="password" placeholder="Repite tu contraseña" maxlength="16" autocomplete="new-password"/>
+    </div>
+
+    <button id="btn-create-account" class="btn-reg-submit">CREAR CUENTA</button>
+    <button id="btn-back-from-register" class="reg-back">← Volver al inicio de sesión</button>
   </div>
 </div>
 
