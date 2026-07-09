@@ -5,29 +5,27 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
 <title>Intercursos JRG — Dashboard</title>
 
-<!-- Firebase -->
-<script type="module">
-  import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
-  import {
-    getFirestore, collection, getDocs, onSnapshot, query, where,
-    addDoc, updateDoc, deleteDoc, setDoc, getDoc, doc,
-    serverTimestamp, increment, runTransaction
-  } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+<script>
+  // ── API PHP (InfinityFree) — Servidor en la nube ──────────────────────
+  // Apunta directamente al dominio eterno del hosting en internet
+  const API = 'http://intercursos-jrg2026.great-site.net/intercursos-api';
 
-  // ── REEMPLAZA CON TU CONFIG REAL ─────────────────────────────
-const firebaseConfig = {
-  apiKey: "AIzaSyBfUxu8cOIqsGQODGSahnhxA4ueaJk1iU0",
-  authDomain: "intercursos-jrg.firebaseapp.com",
-  projectId: "intercursos-jrg",
-  storageBucket: "intercursos-jrg.firebasestorage.app",
-  messagingSenderId: "719460669028",
-  appId: "1:719460669028:web:fecb440237f859c5047171"
-};
-  // ─────────────────────────────────────────────────────────────
-
-  const app = initializeApp(firebaseConfig);
-  const db  = getFirestore(app);
-
+  async function apiFetch(endpoint, opts = {}) {
+    const res = await fetch(`${API}/${endpoint}`, {
+      headers: { 'Content-Type': 'application/json' },
+      ...opts,
+    });
+    const text = await res.text();
+    try {
+      return JSON.parse(text);
+    } catch(e) {
+      // El PHP devolvió HTML (error de PHP) en vez de JSON
+      // Extraemos el mensaje útil del HTML si existe
+      const match = text.match(/<b>(.+?)<\/b>/);
+      const phpMsg = match ? match[1] : text.substring(0, 200);
+      throw new Error(`PHP Error en ${endpoint}: ${phpMsg}`);
+    }
+  }
   // ── HELPERS ──────────────────────────────────────────────────
   const normDisc = d => (d||'').toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g,"");
 
@@ -54,17 +52,14 @@ const firebaseConfig = {
   //  ESTADO GLOBAL
   // ═══════════════════════════════════════════════════
   window.APP = {
-    db, collection, getDocs, onSnapshot, query, where,
-    addDoc, updateDoc, deleteDoc, setDoc, getDoc, doc,
-    serverTimestamp, increment, runTransaction,
     normDisc, idToNombre, generarIdEquipo, abreviarEquipo,
     MAPA_ABR,
-    session: null,      // { cedula, nombre, rol }
+    session: null,
     disc: 'Fútbol',
-    unsubs: [],
     partidos: [],
     posiciones: [],
     mayorAnotador: null,
+    pollTimer: null,
     matchTimer: null,
   };
 
@@ -180,18 +175,17 @@ const firebaseConfig = {
     const pass = document.getElementById('login-pass').value;
     const cedula = `${tipo}${num}`;
     if(!num||!pass){ toast('Completa todos los campos','error'); return; }
-
     setLoginLoading(true);
     try{
-      const q = query(collection(db,'usuarios'), where('cedula','==',cedula));
-      const snap = await getDocs(q);
-      if(snap.empty){ toast('Usuario no encontrado','error'); return; }
-      let valid=false, userData={};
-      snap.forEach(d=>{ if(d.data().password===pass){ valid=true; userData=d.data(); }});
-      if(!valid){ toast('Contraseña incorrecta','error'); return; }
-      APP.session = { cedula, nombre: userData.nombre||'Usuario', rol: userData.rol||'usuario' };
+      const data = await apiFetch('login.php', {
+        method: 'POST',
+        body: JSON.stringify({ cedula, password: pass }),
+      });
+      if(data.error){ toast(data.error,'error'); return; }
+      if(!data.uid){ toast('Error de acceso','error'); return; }
+      APP.session = { cedula: data.cedula, nombre: data.nombre, rol: data.rol };
       bootDashboard();
-    }catch(e){ toast('Error de conexión','error'); }
+    }catch(e){ toast('Error de conexión con el servidor','error'); }
     finally{ setLoginLoading(false); }
   }
 
@@ -212,16 +206,16 @@ const firebaseConfig = {
     document.getElementById('btn-send-code').disabled=true;
     document.getElementById('btn-send-code').textContent='Enviando…';
     try{
-      const q = query(collection(db,'usuarios'), where('emailRecuperacion','==',email));
-      const snap = await getDocs(q);
-      if(snap.empty){ toast('Correo no registrado','error'); return; }
-      let d={};
-      snap.forEach(doc=>{ d=doc.data(); });
-      _recoverData = d;
+      const data = await apiFetch('recuperar.php', {
+        method: 'POST',
+        body: JSON.stringify({ email }),
+      });
+      if(!data.ok){ toast(data.msg||'Correo no registrado','error'); return; }
+      _recoverData = data;
       _recoverCode = Math.floor(100000+Math.random()*900000).toString();
-      // EmailJS
+      // EmailJS sigue igual (cliente-side)
       await emailjs.send('service_pnugtot','template_fbsdydv',
-        { to_email:email, codigo:_recoverCode, name:d.nombre||'Usuario' },'Etf12-NaSwAtvUKCA');
+        { to_email:email, codigo:_recoverCode, name:data.nombre||'Usuario' },'Etf12-NaSwAtvUKCA');
       toast('Código enviado a '+email,'success');
       recoverStep(2);
     }catch(e){ toast('No se pudo enviar el correo','error'); }
@@ -253,21 +247,22 @@ const firebaseConfig = {
   function bootDashboard(){
     document.getElementById('header-name').textContent = APP.session.nombre;
     document.getElementById('header-cedula').textContent = APP.session.cedula;
-    // Show/hide admin nav
     const adminNav = document.getElementById('nav-admin');
-    if(APP.session.rol==='admin') adminNav.style.display='flex';
+    if(APP.session.rol==='admin'||APP.session.rol==='arbitro') adminNav.style.display='flex';
     else adminNav.style.display='none';
-
+    const rolesNav = document.getElementById('nav-roles');
+    if(rolesNav) rolesNav.style.display = APP.session.rol==='admin' ? 'flex' : 'none';
     showScreen('dashboard');
     activateSection('inicio');
-    subscribeData();
-    // tick for live match minutes
+    startPolling();
     APP.matchTimer = setInterval(updateLiveMinutes, 60000);
+    initManualListener();
+    initMiniManualListener();
+    checkAutoManual();
   }
 
   function handleLogout(){
-    APP.unsubs.forEach(u=>u());
-    APP.unsubs=[];
+    stopPolling();
     if(APP.matchTimer) clearInterval(APP.matchTimer);
     APP.session=null;
     APP.partidos=[]; APP.posiciones=[]; APP.mayorAnotador=null;
@@ -276,47 +271,72 @@ const firebaseConfig = {
     document.getElementById('login-pass').value='';
   }
 
-  // ══════════════════════════════════════════════════
-  //  SUBSCRIPTIONS
-  // ══════════════════════════════════════════════════
-  function subscribeData(){
-    APP.unsubs.forEach(u=>u());
-    APP.unsubs=[];
-    const discId = normDisc(APP.disc);
+  // ── POLLING cada 5s (reemplaza onSnapshot) ────────────────────
+  function startPolling(){
+    stopPolling();
+    fetchData();
+    APP.pollTimer = setInterval(fetchData, 5000);
+  }
+  function stopPolling(){
+    if(APP.pollTimer){ clearInterval(APP.pollTimer); APP.pollTimer=null; }
+  }
 
-    // Partidos
-    const u1 = onSnapshot(
-      query(collection(db,'partidos'), where('disciplinaId','==',discId)),
-      snap=>{ APP.partidos=snap.docs.map(d=>({id:d.id,...d.data()})); renderPartidos(); renderNomina(); }
-    );
-    // Posiciones
-    const u2 = onSnapshot(
-      query(collection(db,'posiciones'), where('disciplinaId','==',discId)),
-      snap=>{
-        const docs = snap.docs.map(d=>({id:d.id,...d.data()}));
-        docs.sort((a,b)=>{
-          const pa=Number(a.puntos||0), pb=Number(b.puntos||0);
-          const dga=Number(a.gf||0)-Number(a.gc||0), dgb=Number(b.gf||0)-Number(b.gc||0);
-          if(pb!==pa) return pb-pa;
-          if(dgb!==dga) return dgb-dga;
-          return Number(b.gf||0)-Number(a.gf||0);
-        });
-        APP.posiciones=docs;
-        renderPosiciones();
+  async function fetchData(){
+    const discId = normDisc(APP.disc);
+    try{
+      const [rPart, rPos, rAnot] = await Promise.all([
+        apiFetch(`partidos_get.php?disciplinaId=${discId}`),
+        apiFetch(`posiciones_get.php?disciplinaId=${discId}`),
+        apiFetch(`anotador_get.php?disciplina=${encodeURIComponent(APP.disc)}`),
+      ]);
+
+      // FIX: aceptar respuesta con ok:true O con array directo en data
+      // (por si el PHP devuelve {ok:true,data:[]} o {data:[]} o directamente [])
+      const partData = rPart.ok ? rPart.data :
+                       Array.isArray(rPart.data) ? rPart.data :
+                       Array.isArray(rPart) ? rPart : null;
+
+      const posData  = rPos.ok  ? rPos.data  :
+                       Array.isArray(rPos.data)  ? rPos.data  :
+                       Array.isArray(rPos)  ? rPos  : null;
+
+      const anotData = rAnot.ok ? rAnot.data :
+                       rAnot.data ? rAnot.data : null;
+
+      if(partData !== null){
+        APP.partidos = partData;
+        APP.partidos.sort((a,b)=>new Date(b.fecha_creacion)-new Date(a.fecha_creacion));
+        renderPartidos();
+        if(document.getElementById('page-nomina').classList.contains('active')) renderNominaPage();
+      } else {
+        // Mostrar el error real en los contenedores en lugar de quedarse en "Cargando..."
+        const errMsg = rPart.error || rPart.msg || 'Error al cargar partidos';
+        document.getElementById('live-container').innerHTML   = `<p class="no-data" style="color:#EF4444">Error: ${errMsg}</p>`;
+        document.getElementById('prox-container').innerHTML   = `<p class="no-data" style="color:#EF4444">Error: ${errMsg}</p>`;
+        document.getElementById('result-container').innerHTML = `<p class="no-data" style="color:#EF4444">Error: ${errMsg}</p>`;
       }
-    );
-    // Mayor anotador
-    const u3 = onSnapshot(
-      query(collection(db,'estudiantes'), where('disciplina','==',APP.disc)),
-      snap=>{
-        const lista=snap.docs.map(d=>({id:d.id,...d.data()}));
-        lista.sort((a,b)=>(b.puntos_totales||0)-(a.puntos_totales||0));
-        const top=lista[0];
-        APP.mayorAnotador=(top?.puntos_totales||0)>0?top:null;
+
+      if(posData !== null){
+        APP.posiciones = posData;
+        renderPosiciones();
+      } else {
+        const errPos = rPos.error || rPos.msg || 'Error al cargar posiciones';
+        document.getElementById('tabla-posiciones').innerHTML = `<tr><td colspan="10" class="no-data" style="color:#EF4444">Error: ${errPos}</td></tr>`;
+      }
+
+      if(anotData !== null){
+        APP.mayorAnotador = anotData;
         renderMayorAnotador();
       }
-    );
-    APP.unsubs=[u1,u2,u3];
+
+    }catch(e){
+      // Mostrar error de red real
+      const msg = e.message || 'No se pudo conectar con el servidor';
+      document.getElementById('live-container').innerHTML   = `<p class="no-data" style="color:#EF4444">Sin conexión: ${msg}</p>`;
+      document.getElementById('prox-container').innerHTML   = `<p class="no-data" style="color:#EF4444">Sin conexión: ${msg}</p>`;
+      document.getElementById('result-container').innerHTML = `<p class="no-data" style="color:#EF4444">Sin conexión: ${msg}</p>`;
+      document.getElementById('tabla-posiciones').innerHTML = `<tr><td colspan="10" class="no-data" style="color:#EF4444">Sin conexión: ${msg}</td></tr>`;
+    }
   }
 
   function changeDisciplina(disc){
@@ -324,7 +344,7 @@ const firebaseConfig = {
     document.querySelectorAll('.disc-pill').forEach(p=>{
       p.classList.toggle('active', p.dataset.disc===disc);
     });
-    subscribeData();
+    startPolling();
     renderNominaPage();
   }
 
@@ -347,7 +367,9 @@ const firebaseConfig = {
     document.querySelectorAll('.nav-item').forEach(n=>n.classList.toggle('active',n.dataset.section===name));
     document.querySelectorAll('.section-page').forEach(p=>p.classList.toggle('active',p.id==='page-'+name));
     if(name==='nomina') renderNominaPage();
-    if(name==='admin') renderAdminPage();
+    if(name==='admin')  renderAdminPage();
+    if(name==='roles')  renderRolesPage();
+    checkSectionManual(name);
   }
 
   // ══════════════════════════════════════════════════
@@ -474,17 +496,15 @@ const firebaseConfig = {
     const el=document.getElementById('nomina-container');
     el.innerHTML='<p class="no-data">Cargando…</p>';
     try{
-      const snap=await getDocs(collection(db,'estudiantes'));
       const discFiltro=normDisc(APP.disc);
+      const data = await apiFetch(`estudiantes.php?disciplinaId=${discFiltro}`);
+      if(!data.ok||!data.data.length){ el.innerHTML='<p class="no-data">Sin registros para '+APP.disc+'</p>'; return; }
       const MAPA_NUM_ANO={"1":"1er Año","2":"2do Año","3":"3er Año","4":"4to Año","5":"5to Año"};
       const grupos={};
-      snap.forEach(d=>{
-        const data=d.data();
-        const estDisc=data.disciplinaId||normDisc(data.disciplina||'');
-        if(estDisc!==discFiltro) return;
-        let ano=data.ano, mencion=data.mencion, seccion=data.seccion;
-        if((!ano||!mencion||!seccion)&&data.idEquipo){
-          const p=data.idEquipo.split('-');
+      data.data.forEach(d=>{
+        let ano=d.ano, mencion=d.mencion, seccion=d.seccion;
+        if((!ano||!mencion||!seccion)&&d.idEquipo){
+          const p=d.idEquipo.split('-');
           ano=MAPA_NUM_ANO[p[0]]||p[0]||'Otros';
           mencion=APP.MAPA_ABR[p[1]]||p[1]||'General';
           seccion=p[2]||'';
@@ -493,7 +513,7 @@ const firebaseConfig = {
         const mk=`${mencion} ${seccion}`.trim();
         if(!grupos[ano]) grupos[ano]={};
         if(!grupos[ano][mk]) grupos[ano][mk]=[];
-        grupos[ano][mk].push({...data,id:d.id});
+        grupos[ano][mk].push(d);
       });
       if(!Object.keys(grupos).length){ el.innerHTML='<p class="no-data">Sin registros para '+APP.disc+'</p>'; return; }
       const anoOrder=["1er Año","2do Año","3er Año","4to Año","5to Año"];
@@ -529,7 +549,7 @@ const firebaseConfig = {
   //  STATS MODAL
   // ══════════════════════════════════════════════════
   window.openStatsModal = async function(id){
-    const p=APP.partidos.find(x=>x.id===id);
+    const p=APP.partidos.find(x=>x.id==id);
     if(!p) return;
     const modal=document.getElementById('stats-modal');
     const disc=p.disciplinaId||'futbol';
@@ -576,8 +596,8 @@ const firebaseConfig = {
         <div class="timeline-event">
           <div class="tl-min">${e.minuto||'—'}'</div>
           <div class="tl-info">
-            <div class="tl-equipo">${e.equipo||''}</div>
-            <div class="tl-tipo">${disc==='basket'?'Canasta':disc==='voleibol'?'Punto':'⚽ Gol'}</div>
+            <div class="tl-equipo">${e.equipo==1?'Equipo Local':'Equipo Visita'}</div>
+            <div class="tl-tipo">${e.tipoEvento||''} · ${e.anotador||'Sin nombre'}</div>
           </div>
         </div>`).join('');
     }
@@ -620,6 +640,8 @@ const firebaseConfig = {
   function renderAdminPage(){
     activateAdminTab('partidos');
     renderAdminPartidos();
+    const sysZone = document.getElementById('admin-sistema-zone');
+    if(sysZone) sysZone.style.display = APP.session?.rol==='admin' ? 'block' : 'none';
   }
 
   function activateAdminTab(tab){
@@ -630,12 +652,15 @@ const firebaseConfig = {
 
   function renderAdminPartidos(){
     const el=document.getElementById('admin-partidos-list');
-    const { db, collection, onSnapshot, query } = APP;
     if(!el) return;
-    // Use cached partidos (all disciplines) — fetch fresh
-    getDocs(query(collection(db,'partidos'))).then(snap=>{
-      const list=snap.docs.map(d=>({id:d.id,...d.data()}));
-      list.sort((a,b)=>(b.fecha_creacion?.toMillis?.()??0)-(a.fecha_creacion?.toMillis?.()??0));
+    el.innerHTML='<p class="no-data">Cargando…</p>';
+    Promise.all([
+      apiFetch('partidos_get.php?disciplinaId=futbol'),
+      apiFetch('partidos_get.php?disciplinaId=basket'),
+      apiFetch('partidos_get.php?disciplinaId=voleibol'),
+    ]).then(([r1,r2,r3])=>{
+      const list=[...(r1.ok?r1.data:[]),...(r2.ok?r2.data:[]),...(r3.ok?r3.data:[])];
+      list.sort((a,b)=>new Date(b.fecha_creacion)-new Date(a.fecha_creacion));
       if(!list.length){ el.innerHTML='<p class="no-data">Sin partidos registrados</p>'; return; }
       el.innerHTML=list.map(p=>{
         const estado=String(p.estado_tiempo||'').toLowerCase();
@@ -650,83 +675,55 @@ const firebaseConfig = {
           <div class="amc-teams">${p.equipoLocal||'Local'} <b>${p.goles1??0} – ${p.goles2??0}</b> ${p.equipoVisita||'Visita'}</div>
           <div class="amc-meta">${p.programacion||''} · ${p.ubicacion||''}</div>
           <div class="amc-actions">
-            ${isProg?`<button class="amc-btn start" onclick="adminStartMatch('${p.id}')">▶ Iniciar</button>`:''}
-            ${isLive?`<button class="amc-btn stats" onclick="adminOpenStats('${p.id}')">📊 Stats</button><button class="amc-btn finish" onclick="adminFinishMatch('${p.id}')">⏹ Finalizar</button>`:''}
-            ${isFin?`<button class="amc-btn stats" onclick="openStatsModal('${p.id}')">📊 Ver</button>`:''}
-            <button class="amc-btn danger" onclick="adminDeleteMatch('${p.id}')">🗑</button>
+            ${isProg?`<button class="amc-btn start" onclick="adminStartMatch(${p.id})">▶ Iniciar</button>`:''}
+            ${isLive?`<button class="amc-btn stats" onclick="adminOpenStats(${p.id})">📊 Stats</button><button class="amc-btn finish" onclick="adminFinishMatch(${p.id})">⏹ Finalizar</button>`:''}
+            ${isFin?`<button class="amc-btn stats" onclick="openStatsModal(${p.id})">📊 Ver</button>`:''}
+            ${APP.session?.rol==='admin'?`<button class="amc-btn danger" onclick="adminDeleteMatch(${p.id})">🗑</button>`:''}
           </div>
         </div>`;
       }).join('');
-    });
+    }).catch(()=>{ el.innerHTML='<p class="no-data">Error cargando partidos</p>'; });
   }
 
   window.adminStartMatch = async function(id){
     if(!confirm('¿Iniciar este partido?')) return;
     try{
-      await updateDoc(doc(db,'partidos',id),{ estado_tiempo:'En Vivo', inicio_real_ms: Date.now() });
-      toast('Partido iniciado','success');
+      const data = await apiFetch('partidos.php',{method:'PUT',body:JSON.stringify({accion:'iniciar',partidoId:id})});
+      toast(data.ok?'Partido iniciado':data.msg, data.ok?'success':'error');
       renderAdminPartidos();
-    }catch(e){ toast('Error: '+e.message,'error'); }
+    }catch(e){ toast('Error de conexión','error'); }
   };
 
   window.adminFinishMatch = async function(id){
-    // Fetch full doc
-    const snap=await getDoc(doc(db,'partidos',id));
-    if(!snap.exists()) return;
-    const p={id,...snap.data()};
-    if(!confirm(`¿Finalizar? ${p.equipoLocal} ${p.goles1??0} – ${p.goles2??0} ${p.equipoVisita}`)) return;
+    if(!confirm('¿Finalizar este partido?')) return;
     try{
-      await finalizarPartidoDB(p);
-      toast('Partido finalizado y tabla actualizada','success');
+      const data = await apiFetch('partidos.php',{method:'PUT',body:JSON.stringify({accion:'finalizar',partidoId:id})});
+      toast(data.ok?'Partido finalizado y tabla actualizada':data.msg, data.ok?'success':'error');
       renderAdminPartidos();
-    }catch(e){ toast('Error: '+e.message,'error'); }
+    }catch(e){ toast('Error de conexión','error'); }
   };
 
   window.adminDeleteMatch = async function(id){
     if(!confirm('¿Eliminar este partido? Esta acción es irreversible.')) return;
     try{
-      await deleteDoc(doc(db,'partidos',id));
-      toast('Partido eliminado','success');
+      const data = await apiFetch('partidos.php',{method:'DELETE',body:JSON.stringify({partidoId:id})});
+      toast(data.ok?'Partido eliminado':data.msg, data.ok?'success':'error');
       renderAdminPartidos();
     }catch(e){ toast('Error','error'); }
   };
 
   window.adminOpenStats = function(id){
-    // Fetch fresh for live match
-    getDoc(doc(db,'partidos',id)).then(snap=>{
-      if(!snap.exists()) return;
-      APP.partidos = APP.partidos.filter(p=>p.id!==id);
-      APP.partidos.push({id,...snap.data()});
+    Promise.all([
+      apiFetch('partidos_get.php?disciplinaId=futbol'),
+      apiFetch('partidos_get.php?disciplinaId=basket'),
+      apiFetch('partidos_get.php?disciplinaId=voleibol'),
+    ]).then(([r1,r2,r3])=>{
+      const all=[...(r1.data||[]),...(r2.data||[]),...(r3.data||[])];
+      const p=all.find(x=>x.id==id); if(!p) return;
+      APP.partidos=[...APP.partidos.filter(x=>x.id!=id),p];
       openStatsModal(id);
     });
   };
-
-  async function finalizarPartidoDB(partido){
-    const { id, goles1, goles2 } = partido;
-    const discId = partido.disciplinaId || normDisc(partido.disciplina||'');
-    const idLocal=partido.idLocal||null, idVisita=partido.idVisita||null;
-    await updateDoc(doc(db,'partidos',id),{ estado_tiempo:'Finalizado' });
-    if(!idLocal||!idVisita||!discId) return;
-
-    let pts1=0,pts2=0,pg1=0,pp1=0,pe1=0,pg2=0,pp2=0,pe2=0;
-    if(goles1>goles2){ pg1=1;pp2=1; pts1=discId==='basket'?2:3; }
-    else if(goles2>goles1){ pg2=1;pp1=1; pts2=discId==='basket'?2:3; }
-    else if(discId!=='voleibol'){ pe1=1;pe2=1;pts1=1;pts2=1; }
-
-    const updPos=async(idEq,pts,gf,gc,win,draw,loss)=>{
-      const did=`${idEq}_${discId}`;
-      const ref=doc(db,'posiciones',did);
-      const s=await getDoc(ref);
-      if(s.exists()){
-        const c=s.data();
-        await setDoc(ref,{...c,pj:(c.pj||0)+1,pg:(c.pg||0)+win,pe:(c.pe||0)+draw,pp:(c.pp||0)+loss,gf:(c.gf||0)+gf,gc:(c.gc||0)+gc,puntos:(c.puntos||0)+pts},{merge:true});
-      } else {
-        await setDoc(ref,{idEquipo:idEq,disciplinaId:discId,pj:1,pg:win,pe:draw,pp:loss,gf,gc,puntos:pts});
-      }
-    };
-    await updPos(idLocal,pts1,goles1,goles2,pg1,pe1,pp1);
-    await updPos(idVisita,pts2,goles2,goles1,pg2,pe2,pp2);
-  }
 
   // ── PUBLICAR PARTIDO ─────────────────────────────
   async function publicarPartido(){
@@ -773,18 +770,103 @@ const firebaseConfig = {
     const btn=document.getElementById('btn-publish-match');
     btn.disabled=true; btn.textContent='Publicando…';
     try{
-      await addDoc(collection(db,'partidos'),{
+      const data = await apiFetch('partidos.php',{method:'POST',body:JSON.stringify({
         equipoLocal,equipoVisita,idLocal,idVisita,disciplinaId:discId,
-        goles1:0,goles2:0,historialPuntos:[],
-        stats:{pos1:50,pos2:50,rem1:0,rem2:0,arc1:0,arc2:0,cor1:0,cor2:0,fal1:0,fal2:0,ama1:0,ama2:0,par1:0,par2:0},
-        estado_tiempo:'Programado',inicio_real_ms:null,
-        ubicacion:cancha,programacion:progStr,fecha_creacion:serverTimestamp(),
-      });
-      toast('Partido publicado','success');
-      renderAdminPartidos();
-    }catch(e){ toast('Error: '+e.message,'error'); }
+        ubicacion:cancha,programacion:progStr,
+      })});
+      toast(data.ok?'Partido publicado':data.msg, data.ok?'success':'error');
+      if(data.ok) renderAdminPartidos();
+    }catch(e){ toast('Error de conexión','error'); }
     finally{ btn.disabled=false; btn.textContent='📅 PUBLICAR PARTIDO'; }
   }
+
+  // ── VACIAR SISTEMA ──────────────────────────────
+  window.confirmarBorradoTotal = function(){
+    if(!confirm('ACCIÓN IRREVERSIBLE\n\nEsto borrará TODOS los partidos, posiciones y estudiantes.\nLos usuarios NO serán afectados.\n\n¿Estás absolutamente seguro?')) return;
+    if(!confirm('ÚLTIMA ADVERTENCIA\n\nEsta acción NO se puede deshacer.\n\n¿Confirmas el borrado total?')) return;
+    ejecutarBorradoTotal();
+  };
+
+  async function ejecutarBorradoTotal(){
+    try{
+      const data = await apiFetch('sistema.php',{method:'DELETE',body:JSON.stringify({confirmar:true})});
+      toast(data.ok?'Sistema vaciado correctamente':data.msg||'Error', data.ok?'success':'error');
+      if(data.ok){ renderAdminPartidos(); }
+    }catch(e){ toast('Error de conexión','error'); }
+  }
+
+  // ── GESTIÓN DE ROLES ─────────────────────────────────
+  let _rolUsuarioActual = null; // datos del usuario buscado
+
+  function renderRolesPage(){
+    // Limpiar resultado anterior al entrar a la sección
+    document.getElementById('roles-result').style.display = 'none';
+    document.getElementById('roles-cedula').value = '';
+    _rolUsuarioActual = null;
+  }
+
+  window.buscarUsuarioRol = async function(){
+    const cedula = document.getElementById('roles-cedula').value.trim().toUpperCase();
+    if(!cedula){ toast('Ingresa una cédula','error'); return; }
+    if(!/^[VE]\d{6,9}$/.test(cedula)){ toast('Formato inválido (Ej: V12345678)','error'); return; }
+
+    try{
+      const data = await apiFetch(`roles.php?cedula=${encodeURIComponent(cedula)}`);
+      if(!data.ok){ toast(data.msg||'Usuario no encontrado','error'); return; }
+
+      _rolUsuarioActual = data.usuario;
+      document.getElementById('roles-nombre').textContent        = `${data.usuario.nombre} ${data.usuario.apellido}`;
+      document.getElementById('roles-cedula-display').textContent = data.usuario.cedula;
+      document.getElementById('roles-avatar').textContent        = data.usuario.nombre.charAt(0).toUpperCase();
+
+      const badge = document.getElementById('roles-badge');
+      const rol   = data.usuario.rol;
+      badge.textContent = rol.toUpperCase();
+      badge.style.background = rol==='admin' ? '#7C3AED' : rol==='arbitro' ? '#0284C7' : '#64748B';
+      badge.style.color = 'white';
+
+      // Mostrar/ocultar botones según rol actual
+      const btnDar    = document.getElementById('btn-dar-arbitro');
+      const btnQuitar = document.getElementById('btn-quitar-rol');
+
+      if(rol === 'admin'){
+        // No se puede modificar al admin
+        btnDar.style.display    = 'none';
+        btnQuitar.style.display = 'none';
+        toast('Este usuario es el Administrador global y no puede ser modificado','error');
+      } else if(rol === 'arbitro'){
+        btnDar.style.display    = 'none';
+        btnQuitar.style.display = 'flex';
+      } else {
+        // rol === 'usuario'
+        btnDar.style.display    = 'flex';
+        btnQuitar.style.display = 'none';
+      }
+
+      document.getElementById('roles-result').style.display = 'block';
+    }catch(e){
+      toast('Error de conexión','error');
+    }
+  };
+
+  window.cambiarRol = async function(nuevoRol){
+    if(!_rolUsuarioActual){ toast('Busca un usuario primero','error'); return; }
+    if(_rolUsuarioActual.rol === 'admin'){ toast('No puedes modificar al administrador','error'); return; }
+    if(!confirm(`¿Cambiar rol de ${_rolUsuarioActual.nombre} a "${nuevoRol}"?`)) return;
+
+    try{
+      const data = await apiFetch('roles.php', {
+        method: 'PUT',
+        body: JSON.stringify({ cedula: _rolUsuarioActual.cedula, nuevoRol }),
+      });
+      if(!data.ok){ toast(data.msg||'Error al cambiar rol','error'); return; }
+      toast(`Rol de ${_rolUsuarioActual.nombre} cambiado a ${nuevoRol} correctamente`, 'success');
+      // Refrescar la búsqueda para mostrar el nuevo rol
+      await buscarUsuarioRol();
+    }catch(e){
+      toast('Error de conexión','error');
+    }
+  };
 
   // ── REGISTRAR ESTUDIANTE ─────────────────────────
   async function registrarEstudiante(){
@@ -806,16 +888,17 @@ const firebaseConfig = {
     const btn=document.getElementById('btn-register-student');
     btn.disabled=true; btn.textContent='Registrando…';
     try{
-      await addDoc(collection(db,'estudiantes'),{
+      const data = await apiFetch('estudiantes.php',{method:'POST',body:JSON.stringify({
         nombre,apellido,cedula,tipoDocumento:tipod,ano,mencion,seccion,
         disciplina:disc,disciplinaId:normDisc(disc),idEquipo,
-        puntos_totales:0,fecha_registro:serverTimestamp(),
-      });
-      toast('Estudiante registrado','success');
-      document.getElementById('est-nombre').value='';
-      document.getElementById('est-apellido').value='';
-      document.getElementById('est-cedula').value='';
-    }catch(e){ toast('Error: '+e.message,'error'); }
+      })});
+      toast(data.ok?'Estudiante registrado':data.msg, data.ok?'success':'error');
+      if(data.ok){
+        document.getElementById('est-nombre').value='';
+        document.getElementById('est-apellido').value='';
+        document.getElementById('est-cedula').value='';
+      }
+    }catch(e){ toast('Error de conexión','error'); }
     finally{ btn.disabled=false; btn.textContent='✅ REGISTRAR ESTUDIANTE'; }
   }
 
@@ -878,19 +961,11 @@ const firebaseConfig = {
     const btn = document.getElementById('btn-create-account');
     btn.disabled = true; btn.textContent = 'Creando cuenta…';
     try {
-      // Verificar cédula duplicada
-      const q = query(collection(db,'usuarios'), where('cedula','==', cedulaFull));
-      const snap = await getDocs(q);
-      if (!snap.empty) { toast('Esta cédula ya está registrada', 'error'); return; }
-
-      // Guardar en Firestore (sin Firebase Auth en web — igual que el resto del sistema)
-      await addDoc(collection(db, 'usuarios'), {
-        cedula: cedulaFull, tipoDocumento: tipoDoc,
-        nombre: nom, apellido: ape,
+      const data = await apiFetch('registro.php',{method:'POST',body:JSON.stringify({
+        tipoDoc, cedula: cedulaFull, nombre: nom, apellido: ape,
         emailRecuperacion: mail, password: pass,
-        rol: 'estudiante', fechaRegistro: serverTimestamp(),
-        id_ano: '1', seccion: 'A', disciplina: 'Ninguna', intercursos_inscrito: false,
-      });
+      })});
+      if(!data.ok){ toast(data.msg||'Error al registrar','error'); return; }
       toast('¡Cuenta creada! Ya puedes iniciar sesión.', 'success');
       setTimeout(() => {
         showScreen('login');
@@ -908,6 +983,263 @@ const firebaseConfig = {
   // ══════════════════════════════════════════════════
   //  TOAST
   // ══════════════════════════════════════════════════
+  // ══════════════════════════════════════════════════
+  //  MANUAL DE USUARIO
+  // ══════════════════════════════════════════════════
+  const MANUAL_KEY = 'intercursos_manual_visto_v1';
+
+  const GRADIENTES = {
+    azul:    'linear-gradient(135deg,#0284C7,#38BDF8)',
+    verde:   'linear-gradient(135deg,#10B981,#34D399)',
+    rojo:    'linear-gradient(135deg,#EF4444,#F87171)',
+    purpura: 'linear-gradient(135deg,#8B5CF6,#A78BFA)',
+    amber:   'linear-gradient(135deg,#F59E0B,#FCD34D)',
+    gris:    'linear-gradient(135deg,#64748B,#94A3B8)',
+  };
+
+  const SLIDES_USUARIO = [
+    { icon:'🏠', grad:GRADIENTES.azul,    titulo:'¡Bienvenido a Intercursos!',           desc:'El portal oficial de los Intercursos de la E.T. "José Ricardo Guillén Suárez". Aquí podrás seguir todos los partidos, posiciones y nóminas en tiempo real desde cualquier navegador.' },
+    { icon:'⚽', grad:GRADIENTES.verde,   titulo:'Selecciona tu disciplina',              desc:'En la barra superior encontrarás tres píldoras: ⚽ Fútbol, 🏀 Basket y 🏐 Voleibol. Haz clic en cualquiera para filtrar partidos, posiciones y estadísticas de esa disciplina.' },
+    { icon:'🔴', grad:GRADIENTES.rojo,    titulo:'Partidos en Vivo',                      desc:'Los partidos activos aparecen en rojo con el indicador 🔴 EN VIVO. Verás el marcador actualizado y el minuto en tiempo real. Haz clic en la tarjeta para ver las estadísticas completas del partido.' },
+    { icon:'📅', grad:GRADIENTES.purpura, titulo:'Próximos Partidos y Resultados',        desc:'Consulta los encuentros programados con fecha, hora y cancha. Los partidos finalizados muestran el marcador final. Haz clic en cualquier resultado para ver la cronología de anotaciones.' },
+    { icon:'🏆', grad:GRADIENTES.amber,   titulo:'Tabla de Posiciones',                   desc:'Se actualiza automáticamente al finalizar cada partido. Muestra posición, puntos, PJ, PG, PE (Fútbol), PP, GF, GC y diferencial. Los 3 primeros lugares aparecen destacados en azul.' },
+    { icon:'⭐', grad:GRADIENTES.amber,   titulo:'Mayor Anotador',                        desc:'El jugador con más puntos de la disciplina activa aparece con el trofeo 🏆. Se muestran sus estadísticas acumuladas: goles (Fútbol), TL/2P/3P (Básquet) o Kill/Ace/Bloqueo (Voleibol).' },
+    { icon:'👥', grad:GRADIENTES.azul,    titulo:'Nómina de Jugadores',                   desc:'En el menú lateral ve a "Nóminas" para consultar todos los jugadores inscritos, organizados por año, mención y sección en un acordeón interactivo con estadísticas de cada jugador.' },
+    { icon:'🔄', grad:GRADIENTES.verde,   titulo:'Actualización automática',              desc:'El portal se actualiza automáticamente cada 5 segundos. No necesitas recargar la página. Cualquier cambio realizado por el árbitro o administrador se reflejará en tu pantalla de inmediato.' },
+    { icon:'✅', grad:GRADIENTES.verde,   titulo:'¡Listo para disfrutar!',                desc:'Ya conoces todo lo necesario para seguir los Intercursos desde el portal web. Recuerda que puedes volver a este manual en cualquier momento desde el menú lateral → Ayuda / Manual. ¡Éxito! 🏆' },
+  ];
+
+  const SLIDES_ARBITRO = [
+    ...SLIDES_USUARIO.slice(0,-1),
+    { icon:'⚙️', grad:GRADIENTES.amber,   titulo:'Tu rol: Árbitro',                       desc:'Como Árbitro tienes acceso al Panel Admin desde el menú lateral. Puedes crear partidos, iniciarlos, anotar puntos y registrar estadísticas. No puedes eliminar partidos ni vaciar el sistema.' },
+    { icon:'➕', grad:GRADIENTES.verde,   titulo:'Crear y gestionar partidos',             desc:'En el tab "Nuevo Partido" selecciona disciplina, equipos (año+mención+sección), cancha, fecha y hora. Solo se permiten días hábiles entre 7:00 AM y 6:00 PM. Inicia el partido desde el tab "Partidos".' },
+    { icon:'⚽', grad:GRADIENTES.rojo,    titulo:'Anotar puntos en vivo',                  desc:'Durante un partido EN VIVO haz clic en "+ Pts EQUIPO 1" o "+ Pts EQUIPO 2". Elige el tipo (Gol / TL / Doble / Triple / Kill / Ace / Bloqueo) y selecciona al jugador anotador de la lista.' },
+    { icon:'📊', grad:GRADIENTES.purpura, titulo:'Registrar estadísticas',                 desc:'Haz clic en "📊 Stats" del partido para ingresar estadísticas detalladas por disciplina. Usa los botones + y - para cada valor. Guarda con el botón "GUARDAR ESTADÍSTICAS".' },
+    { icon:'↩️', grad:GRADIENTES.gris,    titulo:'Corregir un error',                      desc:'Si anotaste un punto por error, haz clic en "⏪ Deshacer" en el panel del partido. Esto revierte el último evento: descuenta el marcador y las estadísticas del jugador automáticamente.' },
+    { icon:'✅', grad:GRADIENTES.verde,   titulo:'¡Listo, Árbitro!',                       desc:'Ya puedes gestionar los partidos profesionalmente. Al finalizar un partido la tabla de posiciones se actualiza sola. Recuerda: este manual siempre estará en el menú lateral. ¡Éxito! 🏆' },
+  ];
+
+  const SLIDES_ADMIN = [
+    ...SLIDES_ARBITRO.slice(0,-1),
+    { icon:'🛡️', grad:GRADIENTES.purpura, titulo:'Gestionar Roles de Árbitro',            desc:'Solo tú como Administrador puedes asignar el rol Árbitro. Ve a "Gestionar Roles" en el menú, ingresa la cédula del usuario (Ej: V12345678), haz clic en "Buscar" y luego en "Dar Árbitro".' },
+    { icon:'🗑️', grad:GRADIENTES.rojo,    titulo:'Eliminar partidos y reiniciar',          desc:'Desde el tab "Partidos" del Panel Admin puedes eliminar partidos individuales con el botón 🗑️. Para vaciar todo el torneo, usa el botón "Reiniciar sistema" (requiere doble confirmación).' },
+    { icon:'✅', grad:GRADIENTES.verde,   titulo:'¡Listo, Administrador!',                 desc:'Tienes control total del sistema. Usa con responsabilidad las funciones de eliminación. Este manual siempre estará disponible en el menú lateral → Ayuda / Manual. ¡Los Intercursos están en buenas manos! 🏆' },
+  ];
+
+  let _manualSlides = [];
+  let _manualIdx    = 0;
+  let _manualAuto   = false;
+
+  window.abrirManual = function(auto = false){
+    _manualAuto  = auto;
+    const rol    = APP.session?.rol || 'usuario';
+    _manualSlides = rol==='admin' ? SLIDES_ADMIN : rol==='arbitro' ? SLIDES_ARBITRO : SLIDES_USUARIO;
+    _manualIdx   = 0;
+
+    // Gradiente del header según rol
+    const headerEl = document.getElementById('manual-header');
+    const gradiente = rol==='admin' ? GRADIENTES.purpura : rol==='arbitro' ? GRADIENTES.amber : GRADIENTES.azul;
+    headerEl.style.background = gradiente;
+
+    // Etiqueta de rol
+    const rolLabel = rol.charAt(0).toUpperCase() + rol.slice(1);
+    document.getElementById('manual-rol-label').textContent = `Intercursos · ${rolLabel}`;
+
+    _renderManual();
+    document.getElementById('modal-manual').style.display = 'flex';
+    closeMobileSidebar();
+  };
+
+  window.cerrarManual = function(){
+    document.getElementById('modal-manual').style.display = 'none';
+    if(_manualAuto) localStorage.setItem(MANUAL_KEY, 'true');
+  };
+
+  window.manualSiguiente = function(){
+    if(_manualIdx >= _manualSlides.length - 1){ cerrarManual(); return; }
+    _manualIdx++;
+    _renderManual();
+  };
+
+  window.manualAnterior = function(){
+    if(_manualIdx <= 0) return;
+    _manualIdx--;
+    _renderManual();
+  };
+
+  function _renderManual(){
+    const total     = _manualSlides.length;
+    const slide     = _manualSlides[_manualIdx];
+    const esUltimo  = _manualIdx === total - 1;
+    const esPrimero = _manualIdx === 0;
+    const boxW      = Math.min(560, window.innerWidth * 0.94);
+
+    // Slides container
+    const container = document.getElementById('manual-slides');
+    container.style.width    = `${boxW * total}px`;
+    container.style.transform= `translateX(-${_manualIdx * boxW}px)`;
+
+    // Renderizar todos los slides si aún no están
+    if(container.children.length !== total){
+      container.innerHTML = _manualSlides.map((s,i) => `
+        <div style="width:${boxW}px;min-height:260px;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:28px 32px;text-align:center;box-sizing:border-box;">
+          <div style="width:96px;height:96px;border-radius:48px;background:${s.grad};display:flex;align-items:center;justify-content:center;font-size:44px;margin-bottom:22px;box-shadow:0 8px 24px rgba(0,0,0,0.15);">${s.icon}</div>
+          <div style="font-size:20px;font-weight:900;color:#0F172A;margin-bottom:14px;line-height:1.3;">${s.titulo}</div>
+          <div style="font-size:14px;color:#475569;line-height:1.7;font-weight:500;">${s.desc}</div>
+        </div>
+      `).join('');
+    }
+
+    // Dots
+    const dotsEl = document.getElementById('manual-dots');
+    dotsEl.innerHTML = _manualSlides.map((_,i) => `
+      <div onclick="_manualGoTo(${i})" style="cursor:pointer;height:8px;border-radius:4px;background:${i===_manualIdx?'#0284C7':'#E2E8F0'};width:${i===_manualIdx?'24px':'8px'};transition:all .3s;"></div>
+    `).join('');
+
+    // Counter
+    document.getElementById('manual-counter').textContent = `${_manualIdx+1} / ${total}`;
+
+    // Botones
+    document.getElementById('manual-btn-prev').style.opacity = esPrimero ? '0.3' : '1';
+    document.getElementById('manual-btn-prev').disabled = esPrimero;
+    document.getElementById('manual-btn-next').textContent = esUltimo ? '¡Comenzar! ✓' : 'Siguiente ›';
+
+    // Saltar
+    document.getElementById('manual-saltar-wrap').style.display = esUltimo ? 'none' : 'block';
+  }
+
+  window._manualGoTo = function(i){
+    _manualIdx = i;
+    _renderManual();
+  };
+
+  // Cerrar al hacer clic fuera del box
+  // NOTA: Se registra en initManualListener() llamado desde bootDashboard
+  // para evitar null (el elemento HTML está más abajo que este script)
+  window.initManualListener = function(){
+    const m = document.getElementById('modal-manual');
+    if(m) m.addEventListener('click', function(e){ if(e.target===this) cerrarManual(); });
+  };
+
+  // ── Auto-mostrar la primera vez que entra al dashboard ───────────
+  function checkAutoManual(){
+    const visto = localStorage.getItem(MANUAL_KEY);
+    if(!visto){
+      setTimeout(() => abrirManual(true), 600);
+    }
+  }
+
+
+  // ── MANUAL POR SECCIÓN ───────────────────────────────────────────────────
+  const MANUAL_SECTION_KEYS = {
+    admin: 'intercursos_manual_admin_v1',
+    roles: 'intercursos_manual_roles_v1',
+  };
+
+  // Slides del mini-manual de Panel Admin
+  const MINI_SLIDES_ADMIN = [
+    { icon:'⚙️', grad:['#0284C7','#38BDF8'], title:'Panel de Gestión',
+      desc:'Desde aquí puedes programar partidos, inscribir jugadores y gestionar los Intercursos en tiempo real.' },
+    { icon:'📅', grad:['#8B5CF6','#A78BFA'], title:'Programar Partidos',
+      desc:'Ve a la pestaña "Publicar". Selecciona disciplina, equipos, cancha y horario (lun–vie, 7AM–6PM).' },
+    { icon:'▶️', grad:['#EF4444','#F87171'], title:'Iniciar un Partido',
+      desc:'En la pestaña "Partidos", presiona ▶ en el partido programado para marcarlo como En Vivo.' },
+    { icon:'⚽', grad:['#10B981','#34D399'], title:'Anotar Puntos',
+      desc:'Con el partido En Vivo, haz clic en "Gestionar" → selecciona el tipo de anotación y el jugador.' },
+    { icon:'🏁', grad:['#F59E0B','#FCD34D'], title:'Finalizar Partido',
+      desc:'Al terminar, presiona 🏁 para finalizar. La tabla de posiciones se actualiza automáticamente.' },
+    { icon:'✅', grad:['#10B981','#34D399'], title:'¡Listo!',
+      desc:'Ya conoces el panel. Recuerda: solo el Administrador puede eliminar partidos y vaciar el sistema.' },
+  ];
+
+  // Slides del mini-manual de Gestionar Roles
+  const MINI_SLIDES_ROLES = [
+    { icon:'🛡️', grad:['#8B5CF6','#A78BFA'], title:'Gestionar Roles',
+      desc:'Desde aquí puedes dar o quitar el rol de Árbitro a cualquier usuario registrado en el sistema.' },
+    { icon:'🔍', grad:['#0284C7','#38BDF8'], title:'Buscar por Cédula',
+      desc:'Ingresa la cédula completa con prefijo (Ej: V12345678) y presiona Buscar para ver el rol actual.' },
+    { icon:'✅', grad:['#10B981','#34D399'], title:'Dar rol de Árbitro',
+      desc:'Si el usuario tiene rol "usuario", aparecerá el botón verde para promoverlo a Árbitro.' },
+    { icon:'🔄', grad:['#64748B','#94A3B8'], title:'Revocar rol de Árbitro',
+      desc:'Si el usuario ya es Árbitro, aparecerá el botón para revertirlo a Usuario básico.' },
+    { icon:'⚠️', grad:['#F59E0B','#FCD34D'], title:'Restricciones',
+      desc:'No es posible asignar rol de Administrador desde aquí. El único admin global es V10000000.' },
+    { icon:'✅', grad:['#10B981','#34D399'], title:'¡Entendido!',
+      desc:'Los cambios de rol se aplican de inmediato. El usuario verá su nuevo acceso en el próximo login.' },
+  ];
+
+  function checkSectionManual(section){
+    if(section !== 'admin' && section !== 'roles') return;
+    const key = MANUAL_SECTION_KEYS[section];
+    if(localStorage.getItem(key)) return; // ya visto
+    const slides = section === 'admin' ? MINI_SLIDES_ADMIN : MINI_SLIDES_ROLES;
+    setTimeout(() => abrirMiniManual(slides, key), 700);
+  }
+
+  // ── Mini-manual de sección (modal compacto) ───────────────────────────
+  let _miniIdx = 0;
+  let _miniSlides = [];
+  let _miniKey = '';
+
+  window.abrirMiniManual = function(slides, key){
+    _miniIdx = 0;
+    _miniSlides = slides;
+    _miniKey = key;
+    const overlay = document.getElementById('modal-mini-manual');
+    if(!overlay) return;
+    _renderMini();
+    overlay.style.display = 'flex';
+  };
+
+  window.cerrarMiniManual = function(){
+    if(_miniKey) localStorage.setItem(_miniKey, 'true');
+    document.getElementById('modal-mini-manual').style.display = 'none';
+  };
+
+  window.miniSiguiente = function(){
+    if(_miniIdx >= _miniSlides.length - 1){ cerrarMiniManual(); return; }
+    _miniIdx++;
+    _renderMini();
+  };
+
+  window.miniAnterior = function(){
+    if(_miniIdx <= 0) return;
+    _miniIdx--;
+    _renderMini();
+  };
+
+  function _renderMini(){
+    const s = _miniSlides[_miniIdx];
+    const total = _miniSlides.length;
+    const esPrimero = _miniIdx === 0;
+    const esUltimo  = _miniIdx === total - 1;
+
+    document.getElementById('mini-icon').textContent = s.icon;
+    document.getElementById('mini-icon').style.background = `linear-gradient(135deg,${s.grad[0]},${s.grad[1]})`;
+    document.getElementById('mini-title').textContent = s.title;
+    document.getElementById('mini-desc').textContent  = s.desc;
+    document.getElementById('mini-counter').textContent = `${_miniIdx+1} / ${total}`;
+    document.getElementById('mini-btn-next').textContent = esUltimo ? '¡Entendido! ✓' : 'Siguiente ›';
+    document.getElementById('mini-btn-prev').style.opacity = esPrimero ? '0.3' : '1';
+    document.getElementById('mini-btn-prev').disabled = esPrimero;
+
+    // Dots
+    const dotsEl = document.getElementById('mini-dots');
+    dotsEl.innerHTML = _miniSlides.map((_,i) =>
+      `<div onclick="window._miniGoTo(${i})" style="
+        width:${i===_miniIdx?'20px':'8px'};height:8px;border-radius:4px;cursor:pointer;transition:all .3s;
+        background:${i===_miniIdx?'#0284C7':'#E2E8F0'};"></div>`
+    ).join('');
+  }
+
+  window._miniGoTo = function(i){ _miniIdx=i; _renderMini(); };
+
+  // Registrar listener del mini-modal
+  window.initMiniManualListener = function(){
+    const m = document.getElementById('modal-mini-manual');
+    if(m) m.addEventListener('click', function(e){ if(e.target===this) cerrarMiniManual(); });
+  };
+
   window.toast = function(msg,type='success'){
     const t=document.createElement('div');
     t.className=`toast ${type}`;
@@ -1626,9 +1958,23 @@ table.standings td:nth-child(2){text-align:left;padding-left:12px;font-weight:70
     </nav>
 
     <nav class="nav-group" id="nav-admin" style="display:none">
-      <div class="nav-label">ADMINISTRACIÓN</div>
+      <div class="nav-label">Gestión</div>
       <button class="nav-item" data-section="admin">
         <span class="nav-icon">⚙️</span> Panel Admin
+      </button>
+    </nav>
+
+    <nav class="nav-group" id="nav-roles" style="display:none">
+      <div class="nav-label">SISTEMA</div>
+      <button class="nav-item" data-section="roles">
+        <span class="nav-icon">🛡️</span> Gestionar Roles
+      </button>
+    </nav>
+
+    <nav class="nav-group">
+      <div class="nav-label">SOPORTE</div>
+      <button class="nav-item" id="btn-abrir-manual" onclick="abrirManual()">
+        <span class="nav-icon">❓</span> Ayuda / Manual
       </button>
     </nav>
 
@@ -1733,6 +2079,54 @@ table.standings td:nth-child(2){text-align:left;padding-left:12px;font-weight:70
       <div id="page-nomina" class="section-page">
         <h1 class="page-title">👥 Nóminas — <span id="nomina-disc-title">Fútbol</span></h1>
         <div id="nomina-container"><p class="no-data">Selecciona una disciplina para ver la nómina</p></div>
+      </div>
+
+      <!-- ── ROLES (solo admin) ── -->
+      <div id="page-roles" class="section-page">
+        <h1 class="page-title">🛡️ Gestionar Roles</h1>
+        <div class="card" style="max-width:520px">
+          <div class="card-header"><span class="card-title">Asignar / Revocar rol de Árbitro</span></div>
+          <div style="padding:20px;display:flex;flex-direction:column;gap:14px">
+            <p style="font-size:13px;color:#64748B;margin:0">Ingresa la cédula del usuario (con prefijo V o E) para buscar su cuenta y cambiar su rol.</p>
+            <div style="display:flex;gap:10px">
+              <input id="roles-cedula" type="text" placeholder="Ej: V12345678" maxlength="10"
+                style="flex:1;padding:10px 14px;border:1.5px solid #E2E8F0;border-radius:10px;font-size:14px;outline:none"/>
+              <button onclick="buscarUsuarioRol()"
+                style="padding:10px 18px;background:#0284C7;color:white;border:none;border-radius:10px;font-weight:700;cursor:pointer;font-size:14px">
+                🔍 Buscar
+              </button>
+            </div>
+
+            <!-- resultado de búsqueda -->
+            <div id="roles-result" style="display:none;background:#F8FAFC;border:1px solid #E2E8F0;border-radius:12px;padding:16px">
+              <div style="display:flex;align-items:center;gap:12px;margin-bottom:14px">
+                <div style="width:42px;height:42px;border-radius:50%;background:#0284C7;color:white;display:flex;align-items:center;justify-content:center;font-weight:900;font-size:18px" id="roles-avatar">U</div>
+                <div>
+                  <div style="font-weight:800;font-size:15px;color:#1E293B" id="roles-nombre">—</div>
+                  <div style="font-size:12px;color:#64748B" id="roles-cedula-display">—</div>
+                </div>
+                <div style="margin-left:auto">
+                  <span id="roles-badge" style="padding:4px 12px;border-radius:20px;font-size:11px;font-weight:800">—</span>
+                </div>
+              </div>
+              <div style="display:flex;gap:10px" id="roles-btns">
+                <button id="btn-dar-arbitro" onclick="cambiarRol('arbitro')"
+                  style="flex:1;padding:11px;background:#10B981;color:white;border:none;border-radius:10px;font-weight:700;cursor:pointer;font-size:13px">
+                  ✅ Dar rol de Árbitro
+                </button>
+                <button id="btn-quitar-rol" onclick="cambiarRol('usuario')"
+                  style="flex:1;padding:11px;background:#64748B;color:white;border:none;border-radius:10px;font-weight:700;cursor:pointer;font-size:13px">
+                  🔄 Revertir a Usuario
+                </button>
+              </div>
+            </div>
+
+            <p style="font-size:11px;color:#94A3B8;margin:0">
+              ⚠️ No es posible asignar el rol de Administrador desde esta pantalla.<br>
+              El único administrador global es <b>V10000000</b>.
+            </p>
+          </div>
+        </div>
       </div>
 
       <!-- ── ADMIN ── -->
@@ -1859,6 +2253,18 @@ table.standings td:nth-child(2){text-align:left;padding-left:12px;font-weight:70
           </div>
         </div>
 
+        <!-- VACIAR SISTEMA — solo admin -->
+        <div id="admin-sistema-zone" style="display:none;margin-top:24px;border-top:1px solid #E2E8F0;padding-top:16px">
+          <p style="font-size:9px;font-weight:800;color:#94A3B8;letter-spacing:2px;text-transform:uppercase;margin-bottom:10px">HERRAMIENTAS DEL SISTEMA</p>
+          <button onclick="confirmarBorradoTotal()" style="width:100%;padding:14px;background:#FEF3C7;border:1px solid #F59E0B;border-left:4px solid #EF4444;border-radius:12px;cursor:pointer;text-align:left;display:flex;align-items:center;gap:12px">
+            <span style="font-size:22px">⚙️</span>
+            <span>
+              <div style="font-size:13px;font-weight:700;color:#374151">Reiniciar registros del torneo</div>
+              <div style="font-size:10px;color:#9CA3AF">Elimina partidos, posiciones y nómina · Los usuarios no se ven afectados</div>
+            </span>
+          </button>
+        </div>
+
       </div><!-- /page-admin -->
 
     </div><!-- /content -->
@@ -1877,6 +2283,79 @@ table.standings td:nth-child(2){text-align:left;padding-left:12px;font-weight:70
 </div>
 
 <!-- TOASTS -->
+<!-- ══ MODAL MANUAL DE USUARIO ══════════════════════════════════════════ -->
+<!-- ── MINI-MANUAL DE SECCIÓN ─────────────────────────────────── -->
+<div id="modal-mini-manual" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.6);z-index:2100;align-items:center;justify-content:center;padding:20px;">
+  <div style="background:white;border-radius:24px;width:100%;max-width:400px;overflow:hidden;box-shadow:0 20px 60px rgba(0,0,0,0.3);">
+    <!-- Header icono -->
+    <div style="padding:32px 24px 20px;display:flex;flex-direction:column;align-items:center;gap:12px">
+      <div id="mini-icon" style="width:72px;height:72px;border-radius:20px;display:flex;align-items:center;justify-content:center;font-size:36px;background:linear-gradient(135deg,#0284C7,#38BDF8);"></div>
+      <h2 id="mini-title" style="font-size:20px;font-weight:900;color:#1E293B;margin:0;text-align:center"></h2>
+      <p id="mini-desc" style="font-size:14px;color:#475569;margin:0;text-align:center;line-height:1.6"></p>
+    </div>
+    <!-- Dots -->
+    <div id="mini-dots" style="display:flex;justify-content:center;gap:6px;padding-bottom:16px"></div>
+    <!-- Botones -->
+    <div style="display:flex;align-items:center;gap:10px;padding:0 20px 24px">
+      <button id="mini-btn-prev" onclick="miniAnterior()"
+        style="padding:10px 16px;border:1.5px solid #0284C7;background:white;color:#0284C7;border-radius:12px;font-weight:700;cursor:pointer;font-size:13px">
+        ‹ Anterior
+      </button>
+      <span id="mini-counter" style="flex:1;text-align:center;font-size:12px;color:#94A3B8;font-weight:600"></span>
+      <button id="mini-btn-next" onclick="miniSiguiente()"
+        style="padding:10px 20px;background:#0284C7;color:white;border:none;border-radius:12px;font-weight:700;cursor:pointer;font-size:13px">
+        Siguiente ›
+      </button>
+    </div>
+    <div style="text-align:center;padding-bottom:16px">
+      <button onclick="cerrarMiniManual()" style="background:none;border:none;color:#94A3B8;font-size:12px;cursor:pointer">Saltar tutorial</button>
+    </div>
+  </div>
+</div>
+
+<div id="modal-manual" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.65);z-index:2000;align-items:center;justify-content:center;">
+  <div id="manual-box" style="background:#fff;border-radius:24px;width:min(560px,94vw);max-height:90vh;overflow:hidden;display:flex;flex-direction:column;box-shadow:0 20px 60px rgba(0,0,0,0.3);">
+
+    <!-- Header -->
+    <div id="manual-header" style="padding:20px 24px;display:flex;align-items:center;justify-content:space-between;">
+      <div>
+        <div style="color:white;font-size:18px;font-weight:900;letter-spacing:.5px">Manual de Usuario</div>
+        <div id="manual-rol-label" style="color:rgba(255,255,255,.8);font-size:12px;font-weight:600;margin-top:2px">Intercursos App</div>
+      </div>
+      <button onclick="cerrarManual()" style="width:36px;height:36px;border-radius:18px;border:none;background:rgba(255,255,255,.2);color:white;font-size:20px;cursor:pointer;display:flex;align-items:center;justify-content:center;">✕</button>
+    </div>
+
+    <!-- Slide content -->
+    <div style="flex:1;overflow:hidden;display:flex;align-items:stretch;">
+      <div id="manual-slides" style="display:flex;transition:transform .35s cubic-bezier(.4,0,.2,1);will-change:transform;"></div>
+    </div>
+
+    <!-- Dots -->
+    <div id="manual-dots" style="display:flex;justify-content:center;gap:6px;padding:14px 24px 8px;"></div>
+
+    <!-- Buttons -->
+    <div style="display:flex;align-items:center;justify-content:space-between;padding:8px 24px 16px;">
+      <button id="manual-btn-prev" onclick="manualAnterior()"
+        style="display:flex;align-items:center;gap:4px;padding:10px 16px;border-radius:12px;border:1.5px solid #0284C7;background:#EFF6FF;color:#0284C7;font-weight:800;font-size:13px;cursor:pointer;">
+        ‹ Anterior
+      </button>
+      <span id="manual-counter" style="color:#94A3B8;font-size:13px;font-weight:700;"></span>
+      <button id="manual-btn-next" onclick="manualSiguiente()"
+        style="display:flex;align-items:center;gap:6px;padding:10px 20px;border-radius:12px;border:none;background:#0284C7;color:white;font-weight:900;font-size:13px;cursor:pointer;box-shadow:0 3px 10px rgba(2,132,199,.35);">
+        Siguiente ›
+      </button>
+    </div>
+
+    <!-- Saltar -->
+    <div id="manual-saltar-wrap" style="text-align:center;padding-bottom:16px;">
+      <button onclick="cerrarManual()" style="background:none;border:none;color:#94A3B8;font-size:12px;cursor:pointer;text-decoration:underline;">
+        Saltar tutorial
+      </button>
+    </div>
+
+  </div>
+</div>
+
 <div id="toast-container"></div>
 
 <script>
